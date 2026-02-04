@@ -1,0 +1,58 @@
+version: 2
+
+project_name: notion-cli
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: notion-cli
+    main: ./cmd/notion-cli
+    binary: notion-cli
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+
+# Homebrew tap - uncomment when ready
+# brews:
+#   - name: notion-cli
+#     repository:
+#       owner: lox
+#       name: homebrew-tap
+#     homepage: "https://github.com/lox/notion-cli"
+#     description: "CLI for Notion using remote MCP"
+#     license: "MIT"
+#     install: |
+#       bin.install "notion-cli"
+#     test: |
+#       system "#{bin}/notion-cli", "--version"

@@ -1,0 +1,45 @@
+version: '3'
+
+vars:
+  BINARY: notion-cli
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  build:
+    desc: Build the binary
+    cmds:
+      - go build -ldflags "-X main.version={{.VERSION}}" -o {{.BINARY}} ./cmd/notion-cli
+
+  install:
+    desc: Install to $GOPATH/bin
+    cmds:
+      - go install -ldflags "-X main.version={{.VERSION}}" ./cmd/notion-cli
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test -v ./...
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -f {{.BINARY}}
+      - rm -rf dist/
+
+  check:
+    desc: Run all checks (build, test, lint)
+    cmds:
+      - task: build
+      - task: test
+      - task: lint
