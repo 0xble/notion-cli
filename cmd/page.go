@@ -17,6 +17,7 @@ type PageCmd struct {
 	View   PageViewCmd   `cmd:"" help:"View a page"`
 	Create PageCreateCmd `cmd:"" help:"Create a page"`
 	Upload PageUploadCmd `cmd:"" help:"Upload a markdown file as a page"`
+	Edit   PageEditCmd   `cmd:"" help:"Edit a page"`
 }
 
 type PageListCmd struct {
@@ -303,4 +304,53 @@ func resolvePageByName(client *mcp.Client, name string) (string, error) {
 	}
 
 	return "", &output.UserError{Message: "page not found: " + name}
+}
+
+type PageEditCmd struct {
+	Page      string `arg:"" help:"Page URL or ID"`
+	Replace   string `help:"Replace entire content with this text" xor:"action"`
+	Find      string `help:"Text to find (use ... for ellipsis)" xor:"action"`
+	ReplaceWith string `help:"Text to replace with (requires --find)" name:"replace-with"`
+	Append    string `help:"Append text after selection (requires --find)" xor:"action"`
+}
+
+func (c *PageEditCmd) Run(ctx *Context) error {
+	return runPageEdit(ctx, c.Page, c.Replace, c.Find, c.ReplaceWith, c.Append)
+}
+
+func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText string) error {
+	client, err := cli.RequireClient()
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	bgCtx := context.Background()
+
+	var req mcp.UpdatePageRequest
+	req.PageID = page
+
+	switch {
+	case replace != "":
+		req.Command = "replace_content"
+		req.NewContent = replace
+	case find != "" && replaceWith != "":
+		req.Command = "replace_content_range"
+		req.Selection = find
+		req.NewStr = replaceWith
+	case find != "" && appendText != "":
+		req.Command = "insert_content_after"
+		req.Selection = find
+		req.NewStr = appendText
+	default:
+		return &output.UserError{Message: "specify --replace, or --find with --replace-with or --append"}
+	}
+
+	if err := client.UpdatePage(bgCtx, req); err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	output.PrintSuccess("Page updated")
+	return nil
 }

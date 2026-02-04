@@ -262,6 +262,43 @@ func extractURLFromText(text string) string {
 	return ""
 }
 
+type UpdatePageRequest struct {
+	PageID  string
+	Command string // "replace_content", "replace_content_range", "insert_content_after", "update_properties"
+
+	// For replace_content
+	NewContent string
+
+	// For replace_content_range and insert_content_after
+	Selection string
+	NewStr    string
+
+	// For update_properties
+	Properties map[string]any
+}
+
+func (c *Client) UpdatePage(ctx context.Context, req UpdatePageRequest) error {
+	data := map[string]any{
+		"page_id": req.PageID,
+		"command": req.Command,
+	}
+
+	switch req.Command {
+	case "replace_content":
+		data["new_str"] = req.NewContent
+	case "replace_content_range", "insert_content_after":
+		data["selection_with_ellipsis"] = req.Selection
+		data["new_str"] = req.NewStr
+	case "update_properties":
+		data["properties"] = req.Properties
+	}
+
+	args := map[string]any{"data": data}
+
+	_, err := c.CallTool(ctx, "notion-update-page", args)
+	return err
+}
+
 type GetCommentsRequest struct {
 	PageID   string `json:"page_id,omitempty"`
 	BlockID  string `json:"block_id,omitempty"`
