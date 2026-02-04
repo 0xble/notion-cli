@@ -166,17 +166,35 @@ func (c *Client) Search(ctx context.Context, query string) (*SearchResponse, err
 
 type FetchResult struct {
 	Content string
+	Title   string
+	URL     string
 }
 
-func (c *Client) Fetch(ctx context.Context, url string) (*FetchResult, error) {
+type fetchResponse struct {
+	Metadata struct {
+		Type string `json:"type"`
+	} `json:"metadata"`
+	Title string `json:"title"`
+	URL   string `json:"url"`
+	Text  string `json:"text"`
+}
+
+func (c *Client) Fetch(ctx context.Context, id string) (*FetchResult, error) {
 	result, err := c.CallTool(ctx, "notion-fetch", map[string]any{
-		"url": url,
+		"id": id,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return &FetchResult{Content: extractText(result)}, nil
+	text := extractText(result)
+
+	var resp fetchResponse
+	if err := json.Unmarshal([]byte(text), &resp); err == nil && resp.Text != "" {
+		return &FetchResult{Content: resp.Text, Title: resp.Title, URL: resp.URL}, nil
+	}
+
+	return &FetchResult{Content: text}, nil
 }
 
 type CreatePageRequest struct {
