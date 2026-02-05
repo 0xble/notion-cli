@@ -7,6 +7,8 @@ A command-line interface for Notion using the remote MCP (Model Context Protocol
 
 Inspired by [linear-cli](https://github.com/schpet/linear-cli) - stay in the terminal while managing your Notion workspace.
 
+**Works great with AI agents** — includes a [skill](#skills) that lets agents search, create, and manage your Notion workspace alongside your code.
+
 ## Installation
 
 ### From Source
@@ -20,7 +22,7 @@ go install github.com/lox/notion-cli@latest
 ```bash
 git clone https://github.com/lox/notion-cli
 cd notion-cli
-task build
+mise run build
 ```
 
 ## Quick Start
@@ -124,6 +126,31 @@ This CLI connects to [Notion's remote MCP server](https://developers.notion.com/
 - **Notion-flavoured Markdown** - Create/edit content naturally
 - **Semantic search** - Search across connected apps too
 - **Optimised for CLI** - Efficient responses
+
+## Skills
+
+notion-cli includes a skill that helps AI agents use the CLI effectively.
+
+### Amp / Claude Code
+
+Install the skill using [skills.sh](https://skills.sh):
+
+```bash
+npx skills add lox/notion-cli
+```
+
+Or manually add to your Amp/Claude config:
+
+```bash
+# Amp
+amp skill add https://github.com/lox/notion-cli/tree/main/skills/notion-cli
+
+# Claude Code
+claude plugin marketplace add lox/notion-cli
+claude plugin install notion-cli@notion-cli
+```
+
+View the skill at: [skills/notion-cli/SKILL.md](skills/notion-cli/SKILL.md)
 
 ## Links
 
