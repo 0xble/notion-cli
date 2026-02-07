@@ -1,58 +1,53 @@
 version: 2
 
-project_name: notion-cli
-
-before:
-  hooks:
-    - go mod tidy
-
 builds:
-  - id: notion-cli
-    main: ./cmd/notion-cli
-    binary: notion-cli
-    env:
+  - env:
       - CGO_ENABLED=0
     goos:
-      - darwin
       - linux
+      - darwin
+      - windows
     goarch:
       - amd64
       - arm64
     ldflags:
-      - -s -w
-      - -X main.version={{.Version}}
-      - -X main.commit={{.Commit}}
-      - -X main.date={{.Date}}
+      - -s -w -X main.version={{.Version}}
+    binary: notion-cli
 
 archives:
-  - id: default
-    format: tar.gz
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  - formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
+
+homebrew_casks:
+  - name: notion-cli
+    repository:
+      owner: lox
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/lox/notion-cli
+    description: CLI for Notion - search pages, read content, update pages
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/notion-cli"]
+          end
 
 checksum:
-  name_template: 'checksums.txt'
+  name_template: "checksums.txt"
 
 changelog:
   sort: asc
   filters:
     exclude:
-      - '^docs:'
-      - '^test:'
-      - '^chore:'
-
-# Homebrew tap - uncomment when ready
-# brews:
-#   - name: notion-cli
-#     repository:
-#       owner: lox
-#       name: homebrew-tap
-#     homepage: "https://github.com/lox/notion-cli"
-#     description: "CLI for Notion using remote MCP"
-#     license: "MIT"
-#     install: |
-#       bin.install "notion-cli"
-#     test: |
-#       system "#{bin}/notion-cli", "--version"
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
