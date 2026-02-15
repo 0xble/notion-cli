@@ -193,7 +193,6 @@ type FetchResult struct {
 	Content string
 	Title   string
 	URL     string
-	Type    string
 }
 
 type fetchResponse struct {
@@ -220,7 +219,7 @@ func (c *Client) Fetch(ctx context.Context, id string) (*FetchResult, error) {
 
 	var resp fetchResponse
 	if err := json.Unmarshal([]byte(text), &resp); err == nil && resp.Text != "" {
-		return &FetchResult{Content: resp.Text, Title: resp.Title, URL: resp.URL, Type: resp.Metadata.Type}, nil
+		return &FetchResult{Content: resp.Text, Title: resp.Title, URL: resp.URL}, nil
 	}
 
 	return &FetchResult{Content: text}, nil

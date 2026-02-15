@@ -185,19 +185,20 @@ func runPageCreate(ctx *Context, title, parent, content string) error {
 }
 
 type PageUploadCmd struct {
-	File   string `arg:"" help:"Markdown file to upload" type:"existingfile"`
-	Title  string `help:"Page title (default: filename or first heading)" short:"t"`
-	Parent string `help:"Parent page URL, name, or ID" short:"p"`
-	Icon   string `help:"Emoji icon for the page" short:"i"`
-	JSON   bool   `help:"Output as JSON" short:"j"`
+	File     string `arg:"" help:"Markdown file to upload" type:"existingfile"`
+	Title    string `help:"Page title (default: filename or first heading)" short:"t"`
+	Parent   string `help:"Parent page URL, name, or ID" short:"p"`
+	ParentDB string `help:"Parent database URL, name, or ID" name:"parent-db" short:"d"`
+	Icon     string `help:"Emoji icon for the page" short:"i"`
+	JSON     bool   `help:"Output as JSON" short:"j"`
 }
 
 func (c *PageUploadCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runPageUpload(ctx, c.File, c.Title, c.Parent, c.Icon)
+	return runPageUpload(ctx, c.File, c.Title, c.Parent, c.ParentDB, c.Icon)
 }
 
-func runPageUpload(ctx *Context, file, title, parent, icon string) error {
+func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) error {
 	content, err := os.ReadFile(file)
 	if err != nil {
 		output.PrintError(err)
@@ -230,17 +231,25 @@ func runPageUpload(ctx *Context, file, title, parent, icon string) error {
 		Content: markdown,
 	}
 
-	if parent != "" {
-		parentID, isDatabaseParent, err := resolveParent(bgCtx, client, parent)
+	if parentDB != "" {
+		dbID, err := cli.ResolveDatabaseID(bgCtx, client, parentDB)
 		if err != nil {
 			output.PrintError(err)
 			return err
 		}
-		if isDatabaseParent {
-			req.ParentDatabaseID = parentID
-		} else {
-			req.ParentPageID = parentID
+		dbID, err = client.ResolveDataSourceID(bgCtx, dbID)
+		if err != nil {
+			output.PrintError(err)
+			return err
 		}
+		req.ParentDatabaseID = dbID
+	} else if parent != "" {
+		parentID, err := cli.ResolvePageID(bgCtx, client, parent)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		req.ParentPageID = parentID
 	}
 
 	resp, err := client.CreatePage(bgCtx, req)
@@ -361,19 +370,20 @@ func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText stri
 }
 
 type PageSyncCmd struct {
-	File   string `arg:"" help:"Markdown file to sync" type:"existingfile"`
-	Title  string `help:"Page title (default: filename or first heading)" short:"t"`
-	Parent string `help:"Parent page URL, name, or ID" short:"p"`
-	Icon   string `help:"Emoji icon for the page" short:"i"`
-	JSON   bool   `help:"Output as JSON" short:"j"`
+	File     string `arg:"" help:"Markdown file to sync" type:"existingfile"`
+	Title    string `help:"Page title (default: filename or first heading)" short:"t"`
+	Parent   string `help:"Parent page URL, name, or ID" short:"p"`
+	ParentDB string `help:"Parent database URL, name, or ID" name:"parent-db" short:"d"`
+	Icon     string `help:"Emoji icon for the page" short:"i"`
+	JSON     bool   `help:"Output as JSON" short:"j"`
 }
 
 func (c *PageSyncCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runPageSync(ctx, c.File, c.Title, c.Parent, c.Icon)
+	return runPageSync(ctx, c.File, c.Title, c.Parent, c.ParentDB, c.Icon)
 }
 
-func runPageSync(ctx *Context, file, title, parent, icon string) error {
+func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error {
 	raw, err := os.ReadFile(file)
 	if err != nil {
 		output.PrintError(err)
@@ -435,17 +445,25 @@ func runPageSync(ctx *Context, file, title, parent, icon string) error {
 		Content: body,
 	}
 
-	if parent != "" {
-		parentID, isDatabaseParent, err := resolveParent(bgCtx, client, parent)
+	if parentDB != "" {
+		dbID, err := cli.ResolveDatabaseID(bgCtx, client, parentDB)
 		if err != nil {
 			output.PrintError(err)
 			return err
 		}
-		if isDatabaseParent {
-			req.ParentDatabaseID = parentID
-		} else {
-			req.ParentPageID = parentID
+		dbID, err = client.ResolveDataSourceID(bgCtx, dbID)
+		if err != nil {
+			output.PrintError(err)
+			return err
 		}
+		req.ParentDatabaseID = dbID
+	} else if parent != "" {
+		parentID, err := cli.ResolvePageID(bgCtx, client, parent)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		req.ParentPageID = parentID
 	}
 
 	resp, err := client.CreatePage(bgCtx, req)
@@ -494,55 +512,3 @@ func runPageSync(ctx *Context, file, title, parent, icon string) error {
 	return nil
 }
 
-// resolveParent tries to resolve the parent as a page or database.
-// Returns the resolved ID and whether it's a database parent.
-func resolveParent(ctx context.Context, client *mcp.Client, parent string) (string, bool, error) {
-	ref := cli.ParsePageRef(parent)
-
-	// For IDs/URLs, fetch the resource to check its type
-	if ref.Kind == cli.RefID {
-		result, err := client.Fetch(ctx, ref.ID)
-		if err == nil && (result.Type == "database" || result.Type == "data_source") {
-			// Extract data source ID from the fetched content
-			dsID := extractDataSourceID(result.Content)
-			if dsID == "" {
-				dsID = ref.ID
-			}
-			return dsID, true, nil
-		}
-		// Default to page parent for IDs (either fetch failed or type is page)
-		return ref.ID, false, nil
-	}
-
-	// For names, try page first, then database
-	pageID, pageErr := cli.ResolvePageID(ctx, client, parent)
-	if pageErr == nil {
-		return pageID, false, nil
-	}
-
-	dbID, dbErr := cli.ResolveDatabaseID(ctx, client, parent)
-	if dbErr == nil {
-		return dbID, true, nil
-	}
-	_ = dbErr
-
-	return "", false, pageErr
-}
-
-func extractDataSourceID(content string) string {
-	const prefix = "collection://"
-	idx := strings.Index(content, prefix)
-	if idx < 0 {
-		return ""
-	}
-	start := idx + len(prefix)
-	end := start
-	for end < len(content) && content[end] != '"' && content[end] != '}' && content[end] != ' ' && content[end] != '\n' {
-		end++
-	}
-	id := content[start:end]
-	if len(strings.ReplaceAll(id, "-", "")) == 32 {
-		return id
-	}
-	return ""
-}

@@ -84,14 +84,14 @@ notion-cli page create --title "Child" --parent <page-id>       # Parent by ID
 notion-cli page upload ./document.md
 notion-cli page upload ./doc.md --title "Custom Title"
 notion-cli page upload ./doc.md --parent "Parent Page Name"
-notion-cli page upload ./doc.md --parent <database-id>      # Upload as database entry
+notion-cli page upload ./doc.md --parent-db <db-id>         # Upload as database entry
 
 # Sync a markdown file (create or update)
 # First run creates the page and writes notion-id to the file's frontmatter.
 # Subsequent runs update the page content using the stored notion-id.
 notion-cli page sync ./document.md
 notion-cli page sync ./document.md --parent "Engineering"   # Set parent on first sync
-notion-cli page sync ./document.md --parent <database-id>   # Sync as database entry
+notion-cli page sync ./document.md --parent-db <db-id>      # Sync as database entry
 notion-cli page sync ./document.md --title "Custom Title"
 
 # Edit a page
@@ -147,7 +147,7 @@ notion-cli search "api" --json | jq '.[] | .title'
 
 1. **Search first** - Use `notion-cli search` to find pages before operating on them
 2. **Use URLs or IDs** - Both work for page/database references
-3. **Auto-detect parents** - `--parent` on `page sync`/`page upload` auto-detects whether the parent is a page or database
+3. **Explicit parent types** - Use `--parent` for page parents, `--parent-db` for database parents on `page sync`/`page upload`
 4. **Query databases first** - Use `notion-cli db query <id>` to see the schema and property types before creating entries
 5. **Check --help** - Every command has detailed help: `notion-cli page edit --help`
 6. **Raw output** - Use `--raw` with `page view` to see the original Notion markup
