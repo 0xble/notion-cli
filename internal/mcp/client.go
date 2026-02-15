@@ -193,6 +193,7 @@ type FetchResult struct {
 	Content string
 	Title   string
 	URL     string
+	Type    string
 }
 
 type fetchResponse struct {
@@ -219,7 +220,7 @@ func (c *Client) Fetch(ctx context.Context, id string) (*FetchResult, error) {
 
 	var resp fetchResponse
 	if err := json.Unmarshal([]byte(text), &resp); err == nil && resp.Text != "" {
-		return &FetchResult{Content: resp.Text, Title: resp.Title, URL: resp.URL}, nil
+		return &FetchResult{Content: resp.Text, Title: resp.Title, URL: resp.URL, Type: resp.Metadata.Type}, nil
 	}
 
 	return &FetchResult{Content: text}, nil
@@ -230,6 +231,7 @@ type CreatePageRequest struct {
 	ParentDatabaseID string
 	Title            string
 	Content          string
+	Properties       map[string]string
 }
 
 type CreatePageResponse struct {
@@ -238,10 +240,15 @@ type CreatePageResponse struct {
 }
 
 func (c *Client) CreatePage(ctx context.Context, req CreatePageRequest) (*CreatePageResponse, error) {
+	props := map[string]any{
+		"title": req.Title,
+	}
+	for k, v := range req.Properties {
+		props[k] = v
+	}
+
 	pageSpec := map[string]any{
-		"properties": map[string]any{
-			"title": req.Title,
-		},
+		"properties": props,
 	}
 
 	if req.Content != "" {
@@ -290,6 +297,31 @@ func extractURLFromText(text string) string {
 		return text[idx:end]
 	}
 	return ""
+}
+
+// ResolveDataSourceID fetches a database by ID and extracts the data source ID
+// from the collection:// URL in the content. If the ID is already a data source ID,
+// it's returned as-is (the fetch will fail, and we fall back).
+func (c *Client) ResolveDataSourceID(ctx context.Context, id string) (string, error) {
+	result, err := c.Fetch(ctx, id)
+	if err != nil {
+		return id, nil // assume it's already a data source ID
+	}
+
+	// Look for collection://UUID pattern in the content
+	if idx := strings.Index(result.Content, "collection://"); idx >= 0 {
+		start := idx + len("collection://")
+		end := start
+		for end < len(result.Content) && result.Content[end] != '"' && result.Content[end] != '}' && result.Content[end] != ' ' && result.Content[end] != '\n' {
+			end++
+		}
+		dsID := result.Content[start:end]
+		if len(strings.ReplaceAll(dsID, "-", "")) == 32 {
+			return dsID, nil
+		}
+	}
+
+	return id, nil // fallback to original ID
 }
 
 type UpdatePageRequest struct {

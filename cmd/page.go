@@ -59,7 +59,7 @@ func runPageList(ctx *Context, query string, limit int) error {
 func filterPages(results []mcp.SearchResult, limit int) []output.Page {
 	pages := make([]output.Page, 0)
 	for _, r := range results {
-		if r.ObjectType != "page" && r.Object != "page" {
+		if r.ObjectType != "page" && r.Object != "page" && r.Type != "page" {
 			continue
 		}
 		if limit > 0 && len(pages) >= limit {
@@ -225,20 +225,22 @@ func runPageUpload(ctx *Context, file, title, parent, icon string) error {
 
 	bgCtx := context.Background()
 
-	parentID := parent
+	req := mcp.CreatePageRequest{
+		Title:   title,
+		Content: markdown,
+	}
+
 	if parent != "" {
-		resolved, err := cli.ResolvePageID(bgCtx, client, parent)
+		parentID, isDatabaseParent, err := resolveParent(bgCtx, client, parent)
 		if err != nil {
 			output.PrintError(err)
 			return err
 		}
-		parentID = resolved
-	}
-
-	req := mcp.CreatePageRequest{
-		Title:        title,
-		ParentPageID: parentID,
-		Content:      markdown,
+		if isDatabaseParent {
+			req.ParentDatabaseID = parentID
+		} else {
+			req.ParentPageID = parentID
+		}
 	}
 
 	resp, err := client.CreatePage(bgCtx, req)
@@ -428,20 +430,22 @@ func runPageSync(ctx *Context, file, title, parent, icon string) error {
 		return nil
 	}
 
-	parentID := parent
+	req := mcp.CreatePageRequest{
+		Title:   title,
+		Content: body,
+	}
+
 	if parent != "" {
-		resolved, err := cli.ResolvePageID(bgCtx, client, parent)
+		parentID, isDatabaseParent, err := resolveParent(bgCtx, client, parent)
 		if err != nil {
 			output.PrintError(err)
 			return err
 		}
-		parentID = resolved
-	}
-
-	req := mcp.CreatePageRequest{
-		Title:        title,
-		ParentPageID: parentID,
-		Content:      body,
+		if isDatabaseParent {
+			req.ParentDatabaseID = parentID
+		} else {
+			req.ParentPageID = parentID
+		}
 	}
 
 	resp, err := client.CreatePage(bgCtx, req)
@@ -488,4 +492,57 @@ func runPageSync(ctx *Context, file, title, parent, icon string) error {
 		output.PrintInfo(resp.URL)
 	}
 	return nil
+}
+
+// resolveParent tries to resolve the parent as a page or database.
+// Returns the resolved ID and whether it's a database parent.
+func resolveParent(ctx context.Context, client *mcp.Client, parent string) (string, bool, error) {
+	ref := cli.ParsePageRef(parent)
+
+	// For IDs/URLs, fetch the resource to check its type
+	if ref.Kind == cli.RefID {
+		result, err := client.Fetch(ctx, ref.ID)
+		if err == nil && (result.Type == "database" || result.Type == "data_source") {
+			// Extract data source ID from the fetched content
+			dsID := extractDataSourceID(result.Content)
+			if dsID == "" {
+				dsID = ref.ID
+			}
+			return dsID, true, nil
+		}
+		// Default to page parent for IDs (either fetch failed or type is page)
+		return ref.ID, false, nil
+	}
+
+	// For names, try page first, then database
+	pageID, pageErr := cli.ResolvePageID(ctx, client, parent)
+	if pageErr == nil {
+		return pageID, false, nil
+	}
+
+	dbID, dbErr := cli.ResolveDatabaseID(ctx, client, parent)
+	if dbErr == nil {
+		return dbID, true, nil
+	}
+	_ = dbErr
+
+	return "", false, pageErr
+}
+
+func extractDataSourceID(content string) string {
+	const prefix = "collection://"
+	idx := strings.Index(content, prefix)
+	if idx < 0 {
+		return ""
+	}
+	start := idx + len(prefix)
+	end := start
+	for end < len(content) && content[end] != '"' && content[end] != '}' && content[end] != ' ' && content[end] != '\n' {
+		end++
+	}
+	id := content[start:end]
+	if len(strings.ReplaceAll(id, "-", "")) == 32 {
+		return id
+	}
+	return ""
 }
