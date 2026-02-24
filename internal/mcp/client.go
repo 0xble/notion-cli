@@ -348,6 +348,22 @@ func (c *Client) UpdatePage(ctx context.Context, req UpdatePageRequest) error {
 	return checkToolError(result)
 }
 
+func (c *Client) ArchivePage(ctx context.Context, pageID string) error {
+	return c.UpdatePage(ctx, UpdatePageRequest{
+		PageID:     pageID,
+		Command:    "update_properties",
+		Properties: map[string]any{"archived": true},
+	})
+}
+
+func (c *Client) DeletePage(ctx context.Context, pageID string) error {
+	return c.UpdatePage(ctx, UpdatePageRequest{
+		PageID:     pageID,
+		Command:    "update_properties",
+		Properties: map[string]any{"in_trash": true},
+	})
+}
+
 type GetCommentsRequest struct {
 	PageID           string `json:"page_id,omitempty"`
 	BlockID          string `json:"block_id,omitempty"`

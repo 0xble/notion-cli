@@ -13,12 +13,14 @@ import (
 )
 
 type PageCmd struct {
-	List   PageListCmd   `cmd:"" help:"List pages"`
-	View   PageViewCmd   `cmd:"" help:"View a page"`
-	Create PageCreateCmd `cmd:"" help:"Create a page"`
-	Upload PageUploadCmd `cmd:"" help:"Upload a markdown file as a page"`
-	Sync   PageSyncCmd   `cmd:"" help:"Sync a markdown file to a page (create or update)"`
-	Edit   PageEditCmd   `cmd:"" help:"Edit a page"`
+	List    PageListCmd    `cmd:"" help:"List pages"`
+	View    PageViewCmd    `cmd:"" help:"View a page"`
+	Create  PageCreateCmd  `cmd:"" help:"Create a page"`
+	Upload  PageUploadCmd  `cmd:"" help:"Upload a markdown file as a page"`
+	Sync    PageSyncCmd    `cmd:"" help:"Sync a markdown file to a page (create or update)"`
+	Edit    PageEditCmd    `cmd:"" help:"Edit a page"`
+	Archive PageArchiveCmd `cmd:"" help:"Archive a page"`
+	Delete  PageDeleteCmd  `cmd:"" help:"Delete a page (move to trash)"`
 }
 
 type PageListCmd struct {
@@ -355,6 +357,86 @@ func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText stri
 	}
 
 	output.PrintSuccess("Page updated")
+	return nil
+}
+
+type PageArchiveCmd struct {
+	Page string `arg:"" help:"Page URL, name, or ID"`
+}
+
+func (c *PageArchiveCmd) Run(ctx *Context) error {
+	return runPageArchive(ctx, c.Page)
+}
+
+func runPageArchive(ctx *Context, page string) error {
+	client, err := cli.RequireClient()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = client.Close() }()
+
+	bgCtx := context.Background()
+
+	ref := cli.ParsePageRef(page)
+	pageID := page
+	switch ref.Kind {
+	case cli.RefName:
+		resolved, err := cli.ResolvePageID(bgCtx, client, page)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		pageID = resolved
+	case cli.RefID:
+		pageID = ref.ID
+	}
+
+	if err := client.ArchivePage(bgCtx, pageID); err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	output.PrintSuccess("Page archived")
+	return nil
+}
+
+type PageDeleteCmd struct {
+	Page string `arg:"" help:"Page URL, name, or ID"`
+}
+
+func (c *PageDeleteCmd) Run(ctx *Context) error {
+	return runPageDelete(ctx, c.Page)
+}
+
+func runPageDelete(ctx *Context, page string) error {
+	client, err := cli.RequireClient()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = client.Close() }()
+
+	bgCtx := context.Background()
+
+	ref := cli.ParsePageRef(page)
+	pageID := page
+	switch ref.Kind {
+	case cli.RefName:
+		resolved, err := cli.ResolvePageID(bgCtx, client, page)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		pageID = resolved
+	case cli.RefID:
+		pageID = ref.ID
+	}
+
+	if err := client.DeletePage(bgCtx, pageID); err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	output.PrintSuccess("Page moved to trash")
 	return nil
 }
 
