@@ -171,6 +171,21 @@ func runDBQuery(ctx *Context, id string) error {
 	defer func() { _ = client.Close() }()
 
 	bgCtx := context.Background()
+
+	// If the ID contains ?v=, it's a view URL — use the dedicated query tool
+	if strings.Contains(id, "?v=") {
+		result, err := client.QueryDatabaseView(bgCtx, id)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		if result == "" {
+			output.PrintWarning("No content found")
+			return nil
+		}
+		return output.RenderMarkdown(result)
+	}
+
 	result, err := client.Fetch(bgCtx, id)
 	if err != nil {
 		output.PrintError(err)
