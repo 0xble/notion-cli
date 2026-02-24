@@ -30,8 +30,15 @@ func runCommentList(ctx *Context, pageID string) error {
 	}
 
 	bgCtx := context.Background()
+	resolvedPageID, err := cli.ResolvePageID(bgCtx, client, pageID)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
 	req := mcp.GetCommentsRequest{
-		PageID: pageID,
+		PageID:           resolvedPageID,
+		IncludeAllBlocks: true,
 	}
 
 	resp, err := client.GetComments(bgCtx, req)
@@ -85,8 +92,14 @@ func runCommentCreate(ctx *Context, pageID, content string) error {
 	}
 
 	bgCtx := context.Background()
+	resolvedPageID, err := cli.ResolvePageID(bgCtx, client, pageID)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
 	req := mcp.CreateCommentRequest{
-		PageID: pageID,
+		PageID: resolvedPageID,
 		Text:   content,
 	}
 
