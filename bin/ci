@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+echo "==> build"
+go build -ldflags "-X main.version=dev" -o notion-cli .
+
+echo "==> test"
+go test ./...
+
+echo "==> lint"
+golangci-lint run
+
+echo "==> All checks passed"
