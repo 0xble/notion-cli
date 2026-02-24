@@ -377,7 +377,9 @@ type CreateCommentRequest struct {
 
 func (c *Client) CreateComment(ctx context.Context, req CreateCommentRequest) (*Comment, error) {
 	args := map[string]any{
-		"text": req.Text,
+		"rich_text": []map[string]any{
+			{"text": map[string]any{"content": req.Text}},
+		},
 	}
 	if req.PageID != "" {
 		args["page_id"] = req.PageID
@@ -395,12 +397,24 @@ func (c *Client) CreateComment(ctx context.Context, req CreateCommentRequest) (*
 	}
 
 	text := extractText(result)
-	var comment Comment
-	if err := json.Unmarshal([]byte(text), &comment); err != nil {
-		return nil, fmt.Errorf("parse comment: %w", err)
+
+	// MCP returns {result: {status, id}} on success
+	var wrapped struct {
+		Result struct {
+			Status string `json:"status"`
+			ID     string `json:"id"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(text), &wrapped); err == nil && wrapped.Result.ID != "" {
+		return &Comment{ID: wrapped.Result.ID}, nil
 	}
 
-	return &comment, nil
+	var comment Comment
+	if err := json.Unmarshal([]byte(text), &comment); err == nil {
+		return &comment, nil
+	}
+
+	return &Comment{}, nil
 }
 
 // staticTokenStore provides a token from a fixed string (for CI/env var usage)
