@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
@@ -331,10 +334,12 @@ func (c *Client) UpdatePage(ctx context.Context, req UpdatePageRequest) error {
 }
 
 type GetCommentsRequest struct {
-	PageID   string `json:"page_id,omitempty"`
-	BlockID  string `json:"block_id,omitempty"`
-	Cursor   string `json:"cursor,omitempty"`
-	PageSize int    `json:"page_size,omitempty"`
+	PageID           string `json:"page_id,omitempty"`
+	BlockID          string `json:"block_id,omitempty"`
+	Cursor           string `json:"cursor,omitempty"`
+	PageSize         int    `json:"page_size,omitempty"`
+	IncludeAllBlocks bool   `json:"include_all_blocks,omitempty"`
+	IncludeResolved  bool   `json:"include_resolved,omitempty"`
 }
 
 func (c *Client) GetComments(ctx context.Context, req GetCommentsRequest) (*CommentsResponse, error) {
@@ -351,6 +356,12 @@ func (c *Client) GetComments(ctx context.Context, req GetCommentsRequest) (*Comm
 	if req.PageSize > 0 {
 		args["page_size"] = req.PageSize
 	}
+	if req.IncludeAllBlocks {
+		args["include_all_blocks"] = true
+	}
+	if req.IncludeResolved {
+		args["include_resolved"] = true
+	}
 
 	result, err := c.CallTool(ctx, "notion-get-comments", args)
 	if err != nil {
@@ -361,12 +372,50 @@ func (c *Client) GetComments(ctx context.Context, req GetCommentsRequest) (*Comm
 	}
 
 	text := extractText(result)
+
+	// Try standard JSON format first
 	var resp CommentsResponse
-	if err := json.Unmarshal([]byte(text), &resp); err != nil {
-		return nil, fmt.Errorf("parse comments: %w", err)
+	if err := json.Unmarshal([]byte(text), &resp); err == nil && len(resp.Comments) > 0 {
+		return &resp, nil
 	}
 
-	return &resp, nil
+	// MCP returns XML discussions wrapped in {text: "..."} JSON
+	var wrapped struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal([]byte(text), &wrapped); err == nil && wrapped.Text != "" {
+		comments := parseDiscussionComments(wrapped.Text)
+		return &CommentsResponse{Comments: comments}, nil
+	}
+
+	return &CommentsResponse{}, nil
+}
+
+// parseDiscussionComments extracts Comment structs from the XML discussion
+// format returned by the notion-get-comments MCP tool.
+func parseDiscussionComments(raw string) []Comment {
+	discussionRe := regexp.MustCompile(`(?s)<discussion id="([^"]+)"[^>]*>(.*?)</discussion>`)
+	commentRe := regexp.MustCompile(`(?s)<comment id="([^"]+)"[^>]*datetime="([^"]+)"[^>]*>(.*?)</comment>`)
+
+	matches := discussionRe.FindAllStringSubmatch(raw, -1)
+	comments := make([]Comment, 0)
+	for _, discussionMatch := range matches {
+		discussionID := discussionMatch[1]
+		body := discussionMatch[2]
+		commentMatches := commentRe.FindAllStringSubmatch(body, -1)
+		for _, commentMatch := range commentMatches {
+			createdTime, _ := time.Parse(time.RFC3339, commentMatch[2])
+			comments = append(comments, Comment{
+				ID:           commentMatch[1],
+				DiscussionID: discussionID,
+				CreatedTime:  createdTime,
+				RichText: []RichText{{
+					PlainText: html.UnescapeString(strings.TrimSpace(commentMatch[3])),
+				}},
+			})
+		}
+	}
+	return comments
 }
 
 type CreateCommentRequest struct {
