@@ -228,6 +228,21 @@ func (c *Client) Fetch(ctx context.Context, id string) (*FetchResult, error) {
 	return &FetchResult{Content: text}, nil
 }
 
+// QueryDatabaseView queries a database view by its URL using the
+// notion-query-database-view MCP tool. The viewURL should include a ?v= parameter.
+func (c *Client) QueryDatabaseView(ctx context.Context, viewURL string) (string, error) {
+	result, err := c.CallTool(ctx, "notion-query-database-view", map[string]any{
+		"view_url": viewURL,
+	})
+	if err != nil {
+		return "", err
+	}
+	if err := checkToolError(result); err != nil {
+		return "", err
+	}
+	return extractText(result), nil
+}
+
 type CreatePageRequest struct {
 	ParentPageID     string
 	ParentDatabaseID string
