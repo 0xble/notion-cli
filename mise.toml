@@ -45,16 +45,24 @@ echo "Installed skill to ~/.config/agents/skills/notion/"
 """
 
 [tasks.release]
-description = "Tag the next version and push to trigger a release"
+description = "Tag the next fork version (-0xble.N) and push to trigger a release"
 depends = ["check"]
 run = """
-NEXT=$(svu next)
-CURRENT=$(svu current)
-if [ "$NEXT" = "$CURRENT" ]; then
-  echo "No version bump detected (current: $CURRENT). Use conventional commits (feat:, fix:, etc.)."
-  exit 1
+git fetch upstream --tags >/dev/null 2>&1 || true
+git fetch origin --tags >/dev/null 2>&1 || true
+
+UPSTREAM_TAG=$(git describe --tags --abbrev=0 upstream/main 2>/dev/null || git describe --tags --abbrev=0)
+BASE_TAG=${UPSTREAM_TAG%%-0xble.*}
+
+LATEST_FORK_TAG=$(git tag --list "${BASE_TAG}-0xble.*" --sort=-v:refname | head -n1)
+if [ -n "$LATEST_FORK_TAG" ]; then
+  N=${LATEST_FORK_TAG##*.}
+  NEXT="${BASE_TAG}-0xble.$((N + 1))"
+else
+  NEXT="${BASE_TAG}-0xble.1"
 fi
-echo "Releasing $CURRENT -> $NEXT"
+
+echo "Releasing fork tag: $NEXT (base upstream: $BASE_TAG)"
 git tag "$NEXT"
 git push origin "$NEXT"
 echo "Tagged and pushed $NEXT — release workflow will run on GitHub."
