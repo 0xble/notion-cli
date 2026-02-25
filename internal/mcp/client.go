@@ -349,19 +349,11 @@ func (c *Client) UpdatePage(ctx context.Context, req UpdatePageRequest) error {
 }
 
 func (c *Client) ArchivePage(ctx context.Context, pageID string) error {
-	return c.UpdatePage(ctx, UpdatePageRequest{
-		PageID:     pageID,
-		Command:    "update_properties",
-		Properties: map[string]any{"archived": true},
-	})
+	return errors.New("page archive is currently unsupported: Notion MCP does not expose archive/trash page operations")
 }
 
 func (c *Client) DeletePage(ctx context.Context, pageID string) error {
-	return c.UpdatePage(ctx, UpdatePageRequest{
-		PageID:     pageID,
-		Command:    "update_properties",
-		Properties: map[string]any{"in_trash": true},
-	})
+	return errors.New("page delete is currently unsupported: Notion MCP does not expose archive/trash page operations")
 }
 
 type GetCommentsRequest struct {
