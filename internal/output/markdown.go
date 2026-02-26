@@ -245,7 +245,7 @@ func formatDatabaseContent(content string) string {
 					Type string `json:"type"`
 				}
 				if err := json.Unmarshal([]byte(viewJSON), &view); err == nil {
-						fmt.Fprintf(&out, "- **%s** (%s)\n", view.Name, view.Type)
+					fmt.Fprintf(&out, "- **%s** (%s)\n", view.Name, view.Type)
 				}
 			}
 		}
