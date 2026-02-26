@@ -187,13 +187,13 @@ func runPageCreate(ctx *Context, title, parent, content string) error {
 }
 
 type PageUploadCmd struct {
-	File         string `arg:"" help:"Markdown file to upload" type:"existingfile"`
-	Title        string `help:"Page title (default: filename or first heading)" short:"t"`
-	Parent       string `help:"Parent page URL, name, or ID" short:"p"`
-	Icon         string `help:"Emoji icon for the page" short:"i"`
+	File   string `arg:"" help:"Markdown file to upload" type:"existingfile"`
+	Title  string `help:"Page title (default: filename or first heading)" short:"t"`
+	Parent string `help:"Parent page URL, name, or ID" short:"p"`
+	Icon   string `help:"Emoji icon for the page" short:"i"`
+	JSON   bool   `help:"Output as JSON" short:"j"`
 	AssetBaseURL string `help:"Base URL used to rewrite local image embeds (or NOTION_CLI_ASSET_BASE_URL)"`
 	AssetRoot    string `help:"Local asset root mapped to --asset-base-url (or NOTION_CLI_ASSET_ROOT)"`
-	JSON         bool   `help:"Output as JSON" short:"j"`
 }
 
 func (c *PageUploadCmd) Run(ctx *Context) error {
@@ -308,11 +308,11 @@ func extractEmojiFromTitle(title string) (icon, cleanTitle string) {
 }
 
 type PageEditCmd struct {
-	Page        string `arg:"" help:"Page URL, name, or ID"`
-	Replace     string `help:"Replace entire content with this text" xor:"action"`
-	Find        string `help:"Text to find (use ... for ellipsis)" xor:"action"`
+	Page      string `arg:"" help:"Page URL, name, or ID"`
+	Replace   string `help:"Replace entire content with this text" xor:"action"`
+	Find      string `help:"Text to find (use ... for ellipsis)" xor:"action"`
 	ReplaceWith string `help:"Text to replace with (requires --find)" name:"replace-with"`
-	Append      string `help:"Append text after selection (requires --find)" xor:"action"`
+	Append    string `help:"Append text after selection (requires --find)" xor:"action"`
 }
 
 func (c *PageEditCmd) Run(ctx *Context) error {
@@ -451,13 +451,13 @@ func runPageDelete(ctx *Context, page string) error {
 }
 
 type PageSyncCmd struct {
-	File         string `arg:"" help:"Markdown file to sync" type:"existingfile"`
-	Title        string `help:"Page title (default: filename or first heading)" short:"t"`
-	Parent       string `help:"Parent page URL, name, or ID" short:"p"`
-	Icon         string `help:"Emoji icon for the page" short:"i"`
+	File   string `arg:"" help:"Markdown file to sync" type:"existingfile"`
+	Title  string `help:"Page title (default: filename or first heading)" short:"t"`
+	Parent string `help:"Parent page URL, name, or ID" short:"p"`
+	Icon   string `help:"Emoji icon for the page" short:"i"`
+	JSON   bool   `help:"Output as JSON" short:"j"`
 	AssetBaseURL string `help:"Base URL used to rewrite local image embeds (or NOTION_CLI_ASSET_BASE_URL)"`
 	AssetRoot    string `help:"Local asset root mapped to --asset-base-url (or NOTION_CLI_ASSET_ROOT)"`
-	JSON         bool   `help:"Output as JSON" short:"j"`
 }
 
 func (c *PageSyncCmd) Run(ctx *Context) error {
