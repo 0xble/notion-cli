@@ -187,19 +187,21 @@ func runPageCreate(ctx *Context, title, parent, content string) error {
 }
 
 type PageUploadCmd struct {
-	File   string `arg:"" help:"Markdown file to upload" type:"existingfile"`
-	Title  string `help:"Page title (default: filename or first heading)" short:"t"`
-	Parent string `help:"Parent page URL, name, or ID" short:"p"`
-	Icon   string `help:"Emoji icon for the page" short:"i"`
-	JSON   bool   `help:"Output as JSON" short:"j"`
+	File         string `arg:"" help:"Markdown file to upload" type:"existingfile"`
+	Title        string `help:"Page title (default: filename or first heading)" short:"t"`
+	Parent       string `help:"Parent page URL, name, or ID" short:"p"`
+	Icon         string `help:"Emoji icon for the page" short:"i"`
+	AssetBaseURL string `help:"Base URL used to rewrite local image embeds (or NOTION_CLI_ASSET_BASE_URL)"`
+	AssetRoot    string `help:"Local asset root mapped to --asset-base-url (or NOTION_CLI_ASSET_ROOT)"`
+	JSON         bool   `help:"Output as JSON" short:"j"`
 }
 
 func (c *PageUploadCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runPageUpload(ctx, c.File, c.Title, c.Parent, c.Icon)
+	return runPageUpload(ctx, c.File, c.Title, c.Parent, c.Icon, c.AssetBaseURL, c.AssetRoot)
 }
 
-func runPageUpload(ctx *Context, file, title, parent, icon string) error {
+func runPageUpload(ctx *Context, file, title, parent, icon, assetBaseURL, assetRoot string) error {
 	content, err := os.ReadFile(file)
 	if err != nil {
 		output.PrintError(err)
@@ -207,6 +209,14 @@ func runPageUpload(ctx *Context, file, title, parent, icon string) error {
 	}
 
 	markdown := string(content)
+	markdown, rewrittenCount, err := rewriteLocalImages(file, markdown, assetBaseURL, assetRoot)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+	if rewrittenCount > 0 {
+		output.PrintInfo(fmt.Sprintf("Rewrote %d local image(s) to hosted URLs", rewrittenCount))
+	}
 
 	if title == "" {
 		title = extractTitleFromMarkdown(markdown)
@@ -298,11 +308,11 @@ func extractEmojiFromTitle(title string) (icon, cleanTitle string) {
 }
 
 type PageEditCmd struct {
-	Page      string `arg:"" help:"Page URL, name, or ID"`
-	Replace   string `help:"Replace entire content with this text" xor:"action"`
-	Find      string `help:"Text to find (use ... for ellipsis)" xor:"action"`
+	Page        string `arg:"" help:"Page URL, name, or ID"`
+	Replace     string `help:"Replace entire content with this text" xor:"action"`
+	Find        string `help:"Text to find (use ... for ellipsis)" xor:"action"`
 	ReplaceWith string `help:"Text to replace with (requires --find)" name:"replace-with"`
-	Append    string `help:"Append text after selection (requires --find)" xor:"action"`
+	Append      string `help:"Append text after selection (requires --find)" xor:"action"`
 }
 
 func (c *PageEditCmd) Run(ctx *Context) error {
@@ -441,19 +451,21 @@ func runPageDelete(ctx *Context, page string) error {
 }
 
 type PageSyncCmd struct {
-	File   string `arg:"" help:"Markdown file to sync" type:"existingfile"`
-	Title  string `help:"Page title (default: filename or first heading)" short:"t"`
-	Parent string `help:"Parent page URL, name, or ID" short:"p"`
-	Icon   string `help:"Emoji icon for the page" short:"i"`
-	JSON   bool   `help:"Output as JSON" short:"j"`
+	File         string `arg:"" help:"Markdown file to sync" type:"existingfile"`
+	Title        string `help:"Page title (default: filename or first heading)" short:"t"`
+	Parent       string `help:"Parent page URL, name, or ID" short:"p"`
+	Icon         string `help:"Emoji icon for the page" short:"i"`
+	AssetBaseURL string `help:"Base URL used to rewrite local image embeds (or NOTION_CLI_ASSET_BASE_URL)"`
+	AssetRoot    string `help:"Local asset root mapped to --asset-base-url (or NOTION_CLI_ASSET_ROOT)"`
+	JSON         bool   `help:"Output as JSON" short:"j"`
 }
 
 func (c *PageSyncCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runPageSync(ctx, c.File, c.Title, c.Parent, c.Icon)
+	return runPageSync(ctx, c.File, c.Title, c.Parent, c.Icon, c.AssetBaseURL, c.AssetRoot)
 }
 
-func runPageSync(ctx *Context, file, title, parent, icon string) error {
+func runPageSync(ctx *Context, file, title, parent, icon, assetBaseURL, assetRoot string) error {
 	raw, err := os.ReadFile(file)
 	if err != nil {
 		output.PrintError(err)
@@ -462,6 +474,14 @@ func runPageSync(ctx *Context, file, title, parent, icon string) error {
 
 	content := string(raw)
 	fm, body := cli.ParseFrontmatter(content)
+	body, rewrittenCount, err := rewriteLocalImages(file, body, assetBaseURL, assetRoot)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+	if rewrittenCount > 0 {
+		output.PrintInfo(fmt.Sprintf("Rewrote %d local image(s) to hosted URLs", rewrittenCount))
+	}
 
 	if title == "" {
 		title = extractTitleFromMarkdown(body)
@@ -570,4 +590,25 @@ func runPageSync(ctx *Context, file, title, parent, icon string) error {
 		output.PrintInfo(resp.URL)
 	}
 	return nil
+}
+
+func rewriteLocalImages(sourceFile, markdown, flagBaseURL, flagAssetRoot string) (string, int, error) {
+	assetBaseURL := strings.TrimSpace(flagBaseURL)
+	if assetBaseURL == "" {
+		assetBaseURL = strings.TrimSpace(os.Getenv("NOTION_CLI_ASSET_BASE_URL"))
+	}
+	assetRoot := strings.TrimSpace(flagAssetRoot)
+	if assetRoot == "" {
+		assetRoot = strings.TrimSpace(os.Getenv("NOTION_CLI_ASSET_ROOT"))
+	}
+
+	rewritten, rewrites, err := cli.RewriteLocalMarkdownImages(markdown, cli.MarkdownImageRewriteOptions{
+		SourceFile:   sourceFile,
+		AssetBaseURL: assetBaseURL,
+		AssetRoot:    assetRoot,
+	})
+	if err != nil {
+		return "", 0, err
+	}
+	return rewritten, len(rewrites), nil
 }

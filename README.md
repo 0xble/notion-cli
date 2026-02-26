@@ -75,11 +75,13 @@ notion-cli page upload ./document.md                        # Title from # headi
 notion-cli page upload ./document.md --title "Custom Title" # Explicit title
 notion-cli page upload ./document.md --parent "Engineering" # Parent by name or ID
 notion-cli page upload ./document.md --icon "📄"             # Set emoji icon
+notion-cli page upload ./document.md --asset-base-url "https://cdn.example.com/docs" # Rewrite local image embeds
 
 # Sync a markdown file (create or update)
 notion-cli page sync ./document.md                          # Creates page, writes notion-id to frontmatter
 notion-cli page sync ./document.md                          # Updates page using notion-id from frontmatter
 notion-cli page sync ./document.md --parent "Engineering"   # Set parent on first sync
+notion-cli page sync ./document.md --asset-base-url "https://cdn.example.com/docs"
 
 # Edit an existing page
 notion-cli page edit <url> --replace "New content"                      # Replace all content
@@ -134,6 +136,29 @@ The CLI uses Notion's remote MCP server with OAuth authentication. On first run,
 | Variable | Description |
 |----------|-------------|
 | `NOTION_ACCESS_TOKEN` | Access token for CI/headless usage (skips OAuth) |
+| `NOTION_CLI_ASSET_BASE_URL` | Base URL for rewriting local markdown image embeds during `page upload`/`page sync` |
+| `NOTION_CLI_ASSET_ROOT` | Optional local root mapped to `NOTION_CLI_ASSET_BASE_URL` when building image URLs |
+
+## Local Image Embeds
+
+Notion MCP's markdown format accepts image URLs (`![Caption](URL)`) but does not ingest local file paths directly.
+
+Use `--asset-base-url` (or `NOTION_CLI_ASSET_BASE_URL`) to rewrite local image paths before upload/sync:
+
+```bash
+notion-cli page sync ./notes.md \
+  --asset-base-url "https://cdn.example.com/project"
+```
+
+You can also set an explicit local root for URL path mapping:
+
+```bash
+notion-cli page sync ./notes.md \
+  --asset-base-url "https://cdn.example.com/project" \
+  --asset-root "/Users/you/project"
+```
+
+This works well with static hosts such as miniserve.
 
 ## How It Works
 
