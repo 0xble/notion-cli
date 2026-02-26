@@ -177,10 +177,7 @@ func isLocalDestination(dest string) bool {
 		return true
 	}
 
-	if uriSchemeRE.MatchString(d) {
-		return false
-	}
-	return true
+	return !uriSchemeRE.MatchString(d)
 }
 
 func resolveLocalPath(dest, sourceDir string) (string, error) {
