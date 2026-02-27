@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/lox/notion-cli/internal/api"
 	"github.com/lox/notion-cli/internal/cli"
 	"github.com/lox/notion-cli/internal/mcp"
 	"github.com/lox/notion-cli/internal/output"
@@ -312,25 +313,47 @@ type PageEditCmd struct {
 	Find        string `help:"Text to find (use ... for ellipsis)" xor:"action"`
 	ReplaceWith string `help:"Text to replace with (requires --find)" name:"replace-with"`
 	Append      string `help:"Append text after selection (requires --find)" xor:"action"`
+	Icon        string `help:"Page icon (emoji, https URL, or 'none' to clear)"`
 }
 
 func (c *PageEditCmd) Run(ctx *Context) error {
-	return runPageEdit(ctx, c.Page, c.Replace, c.Find, c.ReplaceWith, c.Append)
+	return runPageEdit(ctx, c.Page, c.Replace, c.Find, c.ReplaceWith, c.Append, c.Icon)
 }
 
-func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText string) error {
-	client, err := cli.RequireClient()
+func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText, icon string) error {
+	explicitIcon, parsedIcon, err := parseExplicitIcon(icon)
 	if err != nil {
+		output.PrintError(err)
 		return err
 	}
-	defer func() { _ = client.Close() }()
+
+	if replace != "" && (find != "" || replaceWith != "" || appendText != "") {
+		return &output.UserError{Message: "use --replace alone, or --find with --replace-with/--append"}
+	}
+	if find == "" && (replaceWith != "" || appendText != "") {
+		return &output.UserError{Message: "--replace-with/--append require --find"}
+	}
+	if replaceWith != "" && appendText != "" {
+		return &output.UserError{Message: "use either --replace-with or --append with --find"}
+	}
+	needsContentUpdate := replace != "" || (find != "" && (replaceWith != "" || appendText != ""))
+	if !needsContentUpdate && !explicitIcon {
+		return &output.UserError{Message: "specify --replace, --find with --replace-with/--append, or --icon"}
+	}
 
 	bgCtx := context.Background()
 
 	ref := cli.ParsePageRef(page)
-	pageID := page
+	pageID := ref.ID
+	var client *mcp.Client
 	switch ref.Kind {
 	case cli.RefName:
+		client, err = cli.RequireClient()
+		if err != nil {
+			return err
+		}
+		defer func() { _ = client.Close() }()
+
 		resolved, err := cli.ResolvePageID(bgCtx, client, page)
 		if err != nil {
 			output.PrintError(err)
@@ -339,34 +362,78 @@ func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText stri
 		pageID = resolved
 	case cli.RefID:
 		pageID = ref.ID
+	case cli.RefURL:
+		if extractedID, ok := cli.ExtractNotionUUID(page); ok {
+			pageID = extractedID
+			break
+		}
+		return &output.UserError{Message: fmt.Sprintf("could not extract page ID from URL: %s\nUse the page ID directly instead.", page)}
 	}
 
-	var req mcp.UpdatePageRequest
-	req.PageID = pageID
+	if needsContentUpdate {
+		if client == nil {
+			client, err = cli.RequireClient()
+			if err != nil {
+				return err
+			}
+			defer func() { _ = client.Close() }()
+		}
 
-	switch {
-	case replace != "":
-		req.Command = "replace_content"
-		req.NewContent = replace
-	case find != "" && replaceWith != "":
-		req.Command = "replace_content_range"
-		req.Selection = find
-		req.NewStr = replaceWith
-	case find != "" && appendText != "":
-		req.Command = "insert_content_after"
-		req.Selection = find
-		req.NewStr = appendText
-	default:
-		return &output.UserError{Message: "specify --replace, or --find with --replace-with or --append"}
+		var req mcp.UpdatePageRequest
+		req.PageID = pageID
+		switch {
+		case replace != "":
+			req.Command = "replace_content"
+			req.NewContent = replace
+		case find != "" && replaceWith != "":
+			req.Command = "replace_content_range"
+			req.Selection = find
+			req.NewStr = replaceWith
+		case find != "" && appendText != "":
+			req.Command = "insert_content_after"
+			req.Selection = find
+			req.NewStr = appendText
+		}
+
+		if err := client.UpdatePage(bgCtx, req); err != nil {
+			output.PrintError(err)
+			return err
+		}
 	}
 
-	if err := client.UpdatePage(bgCtx, req); err != nil {
-		output.PrintError(err)
-		return err
+	if explicitIcon {
+		if err := setPageIcon(bgCtx, pageID, parsedIcon); err != nil {
+			output.PrintError(err)
+			return err
+		}
+		if !needsContentUpdate {
+			output.PrintSuccess("Page icon updated")
+			return nil
+		}
 	}
 
 	output.PrintSuccess("Page updated")
 	return nil
+}
+
+func parseExplicitIcon(icon string) (bool, api.PageIcon, error) {
+	icon = strings.TrimSpace(icon)
+	if icon == "" {
+		return false, api.PageIcon{}, nil
+	}
+	parsed, err := api.ParsePageIcon(icon)
+	if err != nil {
+		return true, api.PageIcon{}, err
+	}
+	return true, parsed, nil
+}
+
+func setPageIcon(ctx context.Context, pageID string, icon api.PageIcon) error {
+	client, err := cli.RequireOfficialAPIClient()
+	if err != nil {
+		return err
+	}
+	return client.SetPageIcon(ctx, pageID, icon)
 }
 
 type PageSyncCmd struct {
