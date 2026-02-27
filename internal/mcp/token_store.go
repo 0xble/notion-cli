@@ -419,7 +419,19 @@ func writeCLIConfig(homeDir string, cfg cliConfig) error {
 		return err
 	}
 
-	data, err := json.MarshalIndent(cfg, "", "  ")
+	merged := map[string]any{}
+	if existing, err := os.ReadFile(path); err == nil {
+		if len(existing) > 0 {
+			if err := json.Unmarshal(existing, &merged); err != nil {
+				return err
+			}
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	merged["active_account"] = cfg.ActiveAccount
+
+	data, err := json.MarshalIndent(merged, "", "  ")
 	if err != nil {
 		return err
 	}

@@ -173,6 +173,49 @@ func TestClearAllTokensRemovesAccountsAndLegacy(t *testing.T) {
 	}
 }
 
+func TestSetActiveAccountPreservesUnknownConfigFields(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	configPath := filepath.Join(home, configDir, configFile)
+	writeTokenFile(t, configPath, map[string]any{
+		"active_account": "default",
+		"api": map[string]any{
+			"base_url":     "https://api.notion.com/v1",
+			"require_icon": true,
+		},
+	})
+
+	if err := SetActiveAccount("work"); err != nil {
+		t.Fatalf("SetActiveAccount() error = %v", err)
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("ReadFile(configPath) error = %v", err)
+	}
+
+	var cfg map[string]any
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("Unmarshal config error = %v", err)
+	}
+
+	if got := cfg["active_account"]; got != "work" {
+		t.Fatalf("active_account = %v, want %q", got, "work")
+	}
+
+	api, ok := cfg["api"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected api object to be preserved, got %T", cfg["api"])
+	}
+	if got := api["base_url"]; got != "https://api.notion.com/v1" {
+		t.Fatalf("api.base_url = %v, want %q", got, "https://api.notion.com/v1")
+	}
+	if got := api["require_icon"]; got != true {
+		t.Fatalf("api.require_icon = %v, want true", got)
+	}
+}
+
 func writeTokenFile(t *testing.T, path string, payload map[string]any) {
 	t.Helper()
 
