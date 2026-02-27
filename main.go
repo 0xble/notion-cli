@@ -19,7 +19,8 @@ func main() {
 		kong.Vars{"version": version},
 	)
 	cli.SetAccessToken(c.Token)
-	err := ctx.Run(&cmd.Context{Token: c.Token})
+	cli.SetAccount(c.Account)
+	err := ctx.Run(&cmd.Context{Token: c.Token, Account: c.Account})
 	ctx.FatalIfErrorf(err)
 	os.Exit(0)
 }
