@@ -55,6 +55,7 @@ notion-cli page create --title "New Page" --content "# Hello World"
 ```bash
 notion-cli auth login                          # Authenticate with Notion via OAuth (default account)
 notion-cli auth login --account work           # Authenticate a named account
+notion-cli auth login --setup-api              # Run official API setup immediately after login
 notion-cli auth refresh --account work         # Refresh one account token
 notion-cli auth status                         # Show current account status
 notion-cli auth status --all                   # Show all accounts
@@ -62,6 +63,13 @@ notion-cli auth list                           # List saved accounts
 notion-cli auth use work                       # Set active account
 notion-cli auth logout --account work          # Clear one account token
 notion-cli auth logout --all                   # Clear all account tokens
+
+# Official Notion API token management
+notion-cli auth api setup                      # Interactive Bubble Tea wizard
+notion-cli auth api setup --api-token "secret_..." # Non-interactive setup
+notion-cli auth api verify                     # Validate configured token
+notion-cli auth api status                     # Show API token status/source
+notion-cli auth api unset                      # Remove saved API token
 ```
 
 ### Pages
@@ -153,6 +161,7 @@ Configuration is stored at:
 Legacy `~/.config/notion-cli/token.json` is migrated automatically to `accounts/default.json` for backward compatibility.
 
 The CLI uses Notion's remote MCP server with OAuth authentication. On first run, `notion-cli auth login` will open your browser to authorize the CLI with your Notion workspace.
+After login, the CLI can optionally guide you through official API token setup for REST-backed features.
 
 **Note:** Access tokens expire after 1 hour. The CLI automatically refreshes tokens when they expire or are about to expire, so you typically don't need to think about this. Use `notion-cli auth refresh` to manually refresh if needed.
 
@@ -164,7 +173,7 @@ The CLI uses Notion's remote MCP server with OAuth authentication. On first run,
 | `NOTION_ACCOUNT` | Account profile to use (`default` fallback when unset) |
 | `NOTION_CLI_ASSET_BASE_URL` | Base URL for rewriting local markdown image embeds during `page upload`/`page sync` |
 | `NOTION_CLI_ASSET_ROOT` | Optional local root mapped to `NOTION_CLI_ASSET_BASE_URL` when building image URLs |
-| `NOTION_API_TOKEN` | Official Notion REST API token (required for `--icon`) |
+| `NOTION_API_TOKEN` | Official Notion REST API token override (can also be saved via `auth api setup`) |
 | `NOTION_API_BASE_URL` | Override Notion REST base URL (default `https://api.notion.com/v1`) |
 | `NOTION_API_NOTION_VERSION` | Override Notion-Version header (default `2022-06-28`) |
 

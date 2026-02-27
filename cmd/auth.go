@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,8 +12,10 @@ import (
 	"time"
 
 	"github.com/fatih/color"
+	"github.com/lox/notion-cli/internal/config"
 	"github.com/lox/notion-cli/internal/mcp"
 	"github.com/lox/notion-cli/internal/output"
+	"golang.org/x/term"
 )
 
 type AuthCmd struct {
@@ -22,9 +25,12 @@ type AuthCmd struct {
 	Logout  AuthLogoutCmd  `cmd:"" help:"Clear stored credentials"`
 	Use     AuthUseCmd     `cmd:"" help:"Set the active account"`
 	List    AuthListCmd    `cmd:"" help:"List saved accounts"`
+	API     AuthAPICmd     `cmd:"" name:"api" help:"Official Notion API token setup and status"`
 }
 
 type AuthLoginCmd struct {
+	SetupAPI           bool `help:"Run official API token setup after login" name:"setup-api"`
+	SkipAPISetupPrompt bool `help:"Skip optional official API setup prompt after login" name:"skip-api-setup-prompt"`
 }
 
 func (c *AuthLoginCmd) Run(ctx *Context) error {
@@ -52,6 +58,12 @@ func (c *AuthLoginCmd) Run(ctx *Context) error {
 	}
 
 	output.PrintSuccess(fmt.Sprintf("Active account set to '%s'", account))
+
+	if err := maybeRunPostLoginAPISetup(c); err != nil {
+		output.PrintError(err)
+		return err
+	}
+
 	return nil
 }
 
@@ -391,4 +403,55 @@ func writeJSON(v any) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
+}
+
+func maybeRunPostLoginAPISetup(cmd *AuthLoginCmd) error {
+	if cmd == nil {
+		return nil
+	}
+	if cmd.SkipAPISetupPrompt {
+		return nil
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(cfg.API.Token) != "" {
+		return nil
+	}
+
+	if cmd.SetupAPI {
+		return runAuthAPISetup(authAPISetupOptions{FromLogin: true})
+	}
+	if !isInteractiveTerminal() {
+		return nil
+	}
+
+	yes, err := promptYesNo("Enable official API features now? [y/N]: ")
+	if err != nil {
+		return err
+	}
+	if !yes {
+		output.PrintInfo("Skipping official API setup. You can run 'notion-cli auth api setup' later.")
+		return nil
+	}
+
+	return runAuthAPISetup(authAPISetupOptions{FromLogin: true})
+}
+
+func isInteractiveTerminal() bool {
+	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+}
+
+func promptYesNo(prompt string) (bool, error) {
+	fmt.Print(prompt)
+
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return false, err
+	}
+	answer := strings.ToLower(strings.TrimSpace(line))
+	return answer == "y" || answer == "yes", nil
 }
