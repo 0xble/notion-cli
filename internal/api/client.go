@@ -164,6 +164,20 @@ func (c *Client) SetPageIcon(ctx context.Context, pageID string, icon PageIcon) 
 	return c.PatchPage(ctx, pageID, patch)
 }
 
+func (c *Client) VerifyToken(ctx context.Context) error {
+	var me struct {
+		ID     string `json:"id"`
+		Object string `json:"object"`
+	}
+	if err := c.doJSON(ctx, http.MethodGet, "/users/me", nil, &me); err != nil {
+		return err
+	}
+	if strings.TrimSpace(me.ID) == "" {
+		return fmt.Errorf("official API verify token failed: empty user ID in response")
+	}
+	return nil
+}
+
 func isLikelyEmoji(r rune) bool {
 	return !unicode.IsLetter(r) && !unicode.IsDigit(r) && !unicode.IsSpace(r) && !unicode.IsPunct(r) && r > 127
 }

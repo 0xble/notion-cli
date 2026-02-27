@@ -272,3 +272,76 @@ func TestSetPageIconBuildsPayloads(t *testing.T) {
 		})
 	}
 }
+
+func TestVerifyTokenSendsGetRequest(t *testing.T) {
+	t.Parallel()
+
+	var gotMethod string
+	var gotPath string
+	var gotAuth string
+	var gotVersion string
+	var gotContentType string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		gotAuth = r.Header.Get("Authorization")
+		gotVersion = r.Header.Get("Notion-Version")
+		gotContentType = r.Header.Get("Content-Type")
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"object":"user","id":"user-id"}`))
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(config.APIConfig{
+		BaseURL:       srv.URL,
+		NotionVersion: "2022-06-28",
+	}, "secret-token")
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	if err := client.VerifyToken(context.Background()); err != nil {
+		t.Fatalf("verify token: %v", err)
+	}
+
+	if gotMethod != http.MethodGet {
+		t.Fatalf("method mismatch: got %s", gotMethod)
+	}
+	if gotPath != "/users/me" {
+		t.Fatalf("path mismatch: got %s", gotPath)
+	}
+	if gotAuth != "Bearer secret-token" {
+		t.Fatalf("auth mismatch: got %s", gotAuth)
+	}
+	if gotVersion != "2022-06-28" {
+		t.Fatalf("notion-version mismatch: got %s", gotVersion)
+	}
+	if gotContentType != "" {
+		t.Fatalf("content-type should be empty for GET, got %q", gotContentType)
+	}
+}
+
+func TestVerifyTokenRequiresUserIDInResponse(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"object":"user"}`))
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(config.APIConfig{BaseURL: srv.URL}, "secret-token")
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	err = client.VerifyToken(context.Background())
+	if err == nil {
+		t.Fatal("expected empty user id error")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "empty user id") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
