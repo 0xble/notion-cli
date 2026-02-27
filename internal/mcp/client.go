@@ -139,7 +139,7 @@ type AuthRequiredError struct {
 }
 
 func (e *AuthRequiredError) Error() string {
-	return "authentication required - run 'notion config auth'"
+	return "authentication required - run 'notion-cli auth login'"
 }
 
 func IsAuthRequired(err error) bool {

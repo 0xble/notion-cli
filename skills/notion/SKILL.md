@@ -13,7 +13,7 @@ A CLI to manage Notion from the command line, using Notion's remote MCP server.
 The `notion-cli` command must be available on PATH. To check:
 
 ```bash
-notion-cli --version
+notion-cli version
 ```
 
 If not installed:
@@ -43,7 +43,7 @@ For CI/headless environments, set `NOTION_ACCESS_TOKEN`. You can also choose pro
 
 ```
 notion-cli auth            # Manage authentication
-notion-cli page            # Manage pages (list, view, create, upload, edit)
+notion-cli page            # Manage pages (list, view, create, upload, sync, edit, archive, delete)
 notion-cli db              # Manage databases (list, query)
 notion-cli search          # Search the workspace
 notion-cli comment         # Manage comments (list, create)
