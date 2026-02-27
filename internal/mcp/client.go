@@ -248,6 +248,7 @@ type CreatePageRequest struct {
 	ParentDatabaseID string
 	Title            string
 	Content          string
+	Properties       map[string]any
 }
 
 type CreatePageResponse struct {
@@ -256,10 +257,15 @@ type CreatePageResponse struct {
 }
 
 func (c *Client) CreatePage(ctx context.Context, req CreatePageRequest) (*CreatePageResponse, error) {
+	properties := map[string]any{
+		"title": req.Title,
+	}
+	for key, value := range req.Properties {
+		properties[key] = value
+	}
+
 	pageSpec := map[string]any{
-		"properties": map[string]any{
-			"title": req.Title,
-		},
+		"properties": properties,
 	}
 
 	if req.Content != "" {
