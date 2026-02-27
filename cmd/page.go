@@ -187,21 +187,24 @@ func runPageCreate(ctx *Context, title, parent, content string) error {
 }
 
 type PageUploadCmd struct {
-	File   string `arg:"" help:"Markdown file to upload" type:"existingfile"`
-	Title  string `help:"Page title (default: filename or first heading)" short:"t"`
-	Parent string `help:"Parent page URL, name, or ID" short:"p"`
-	Icon   string `help:"Emoji icon for the page" short:"i"`
-	JSON   bool   `help:"Output as JSON" short:"j"`
-	AssetBaseURL string `help:"Base URL used to rewrite local image embeds (or NOTION_CLI_ASSET_BASE_URL)"`
-	AssetRoot    string `help:"Local asset root mapped to --asset-base-url (or NOTION_CLI_ASSET_ROOT)"`
+	File         string   `arg:"" help:"Markdown file to upload" type:"existingfile"`
+	Title        string   `help:"Page title (default: filename or first heading)" short:"t"`
+	Parent       string   `help:"Parent page URL, name, or ID" short:"p"`
+	Icon         string   `help:"Emoji icon for the page" short:"i"`
+	JSON         bool     `help:"Output as JSON" short:"j"`
+	AssetBaseURL string   `help:"Base URL used to rewrite local image embeds (or NOTION_CLI_ASSET_BASE_URL)"`
+	AssetRoot    string   `help:"Local asset root mapped to --asset-base-url (or NOTION_CLI_ASSET_ROOT)"`
+	PropertyMode string   `help:"Property sync mode: off, warn, or strict" enum:"off,warn,strict" default:"warn" name:"property-mode"`
+	Props        []string `help:"Semicolon-delimited properties (key=value;key2=value2). Repeatable." name:"props"`
+	Prop         []string `help:"Single property assignment key=value. Repeatable." name:"prop"`
 }
 
 func (c *PageUploadCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runPageUpload(ctx, c.File, c.Title, c.Parent, c.Icon, c.AssetBaseURL, c.AssetRoot)
+	return runPageUpload(ctx, c.File, c.Title, c.Parent, c.Icon, c.AssetBaseURL, c.AssetRoot, c.PropertyMode, c.Props, c.Prop)
 }
 
-func runPageUpload(ctx *Context, file, title, parent, icon, assetBaseURL, assetRoot string) error {
+func runPageUpload(ctx *Context, file, title, parent, icon, assetBaseURL, assetRoot, propertyModeRaw string, propsFlags, propFlags []string) error {
 	content, err := os.ReadFile(file)
 	if err != nil {
 		output.PrintError(err)
@@ -229,6 +232,22 @@ func runPageUpload(ctx *Context, file, title, parent, icon, assetBaseURL, assetR
 		icon, title = extractEmojiFromTitle(title)
 	}
 
+	propertyMode, err := cli.ParsePropertyMode(propertyModeRaw)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	flagProperties := map[string]any{}
+	if propertyMode != cli.PropertyModeOff {
+		var parseErrs []error
+		flagProperties, parseErrs = cli.ParsePropertiesFlags(propsFlags, propFlags)
+		if err := handlePropertyParseErrors(propertyMode, parseErrs); err != nil {
+			output.PrintError(err)
+			return err
+		}
+	}
+
 	client, err := cli.RequireClient()
 	if err != nil {
 		return err
@@ -251,12 +270,20 @@ func runPageUpload(ctx *Context, file, title, parent, icon, assetBaseURL, assetR
 		Title:        title,
 		ParentPageID: parentID,
 		Content:      markdown,
+		Properties:   flagProperties,
 	}
 
 	resp, err := client.CreatePage(bgCtx, req)
 	if err != nil {
-		output.PrintError(err)
-		return err
+		if len(flagProperties) > 0 && propertyMode == cli.PropertyModeWarn {
+			output.PrintWarning("Page creation with properties failed; retrying without properties: " + err.Error())
+			req.Properties = nil
+			resp, err = client.CreatePage(bgCtx, req)
+		}
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
 	}
 
 	displayTitle := title
@@ -308,11 +335,11 @@ func extractEmojiFromTitle(title string) (icon, cleanTitle string) {
 }
 
 type PageEditCmd struct {
-	Page      string `arg:"" help:"Page URL, name, or ID"`
-	Replace   string `help:"Replace entire content with this text" xor:"action"`
-	Find      string `help:"Text to find (use ... for ellipsis)"`
+	Page        string `arg:"" help:"Page URL, name, or ID"`
+	Replace     string `help:"Replace entire content with this text" xor:"action"`
+	Find        string `help:"Text to find (use ... for ellipsis)"`
 	ReplaceWith string `help:"Text to replace with (requires --find)" name:"replace-with"`
-	Append    string `help:"Append text after selection (requires --find)"`
+	Append      string `help:"Append text after selection (requires --find)"`
 }
 
 func (c *PageEditCmd) Run(ctx *Context) error {
@@ -461,21 +488,24 @@ func runPageDelete(ctx *Context, page string) error {
 }
 
 type PageSyncCmd struct {
-	File   string `arg:"" help:"Markdown file to sync" type:"existingfile"`
-	Title  string `help:"Page title (default: filename or first heading)" short:"t"`
-	Parent string `help:"Parent page URL, name, or ID" short:"p"`
-	Icon   string `help:"Emoji icon for the page" short:"i"`
-	JSON   bool   `help:"Output as JSON" short:"j"`
-	AssetBaseURL string `help:"Base URL used to rewrite local image embeds (or NOTION_CLI_ASSET_BASE_URL)"`
-	AssetRoot    string `help:"Local asset root mapped to --asset-base-url (or NOTION_CLI_ASSET_ROOT)"`
+	File         string   `arg:"" help:"Markdown file to sync" type:"existingfile"`
+	Title        string   `help:"Page title (default: filename or first heading)" short:"t"`
+	Parent       string   `help:"Parent page URL, name, or ID" short:"p"`
+	Icon         string   `help:"Emoji icon for the page" short:"i"`
+	JSON         bool     `help:"Output as JSON" short:"j"`
+	AssetBaseURL string   `help:"Base URL used to rewrite local image embeds (or NOTION_CLI_ASSET_BASE_URL)"`
+	AssetRoot    string   `help:"Local asset root mapped to --asset-base-url (or NOTION_CLI_ASSET_ROOT)"`
+	PropertyMode string   `help:"Property sync mode: off, warn, or strict" enum:"off,warn,strict" default:"warn" name:"property-mode"`
+	Props        []string `help:"Semicolon-delimited properties (key=value;key2=value2). Repeatable." name:"props"`
+	Prop         []string `help:"Single property assignment key=value. Repeatable." name:"prop"`
 }
 
 func (c *PageSyncCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runPageSync(ctx, c.File, c.Title, c.Parent, c.Icon, c.AssetBaseURL, c.AssetRoot)
+	return runPageSync(ctx, c.File, c.Title, c.Parent, c.Icon, c.AssetBaseURL, c.AssetRoot, c.PropertyMode, c.Props, c.Prop)
 }
 
-func runPageSync(ctx *Context, file, title, parent, icon, assetBaseURL, assetRoot string) error {
+func runPageSync(ctx *Context, file, title, parent, icon, assetBaseURL, assetRoot, propertyModeRaw string, propsFlags, propFlags []string) error {
 	raw, err := os.ReadFile(file)
 	if err != nil {
 		output.PrintError(err)
@@ -503,6 +533,40 @@ func runPageSync(ctx *Context, file, title, parent, icon, assetBaseURL, assetRoo
 		icon, title = extractEmojiFromTitle(title)
 	}
 
+	propertyMode, err := cli.ParsePropertyMode(propertyModeRaw)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	frontmatterProperties := map[string]any{}
+	if propertyMode != cli.PropertyModeOff {
+		frontmatterProperties, err = cli.ParseFrontmatterProperties(content)
+		if err != nil {
+			if propertyMode == cli.PropertyModeStrict {
+				output.PrintError(err)
+				return err
+			}
+			output.PrintWarning(err.Error())
+			frontmatterProperties = map[string]any{}
+		}
+	}
+
+	flagProperties := map[string]any{}
+	if propertyMode != cli.PropertyModeOff {
+		var parseErrs []error
+		flagProperties, parseErrs = cli.ParsePropertiesFlags(propsFlags, propFlags)
+		if err := handlePropertyParseErrors(propertyMode, parseErrs); err != nil {
+			output.PrintError(err)
+			return err
+		}
+	}
+
+	properties := cli.MergeProperties(frontmatterProperties, flagProperties)
+	if propertyMode == cli.PropertyModeOff {
+		properties = nil
+	}
+
 	client, err := cli.RequireClient()
 	if err != nil {
 		return err
@@ -512,6 +576,21 @@ func runPageSync(ctx *Context, file, title, parent, icon, assetBaseURL, assetRoo
 	bgCtx := context.Background()
 
 	if fm.NotionID != "" {
+		if len(properties) > 0 {
+			propReq := mcp.UpdatePageRequest{
+				PageID:     fm.NotionID,
+				Command:    "update_properties",
+				Properties: properties,
+			}
+			if err := client.UpdatePage(bgCtx, propReq); err != nil {
+				if propertyMode == cli.PropertyModeStrict {
+					output.PrintError(err)
+					return err
+				}
+				output.PrintWarning("Property update failed; continuing content sync due --property-mode=warn: " + err.Error())
+			}
+		}
+
 		req := mcp.UpdatePageRequest{
 			PageID:     fm.NotionID,
 			Command:    "replace_content",
@@ -554,12 +633,20 @@ func runPageSync(ctx *Context, file, title, parent, icon, assetBaseURL, assetRoo
 		Title:        title,
 		ParentPageID: parentID,
 		Content:      body,
+		Properties:   properties,
 	}
 
 	resp, err := client.CreatePage(bgCtx, req)
 	if err != nil {
-		output.PrintError(err)
-		return err
+		if len(properties) > 0 && propertyMode == cli.PropertyModeWarn {
+			output.PrintWarning("Page creation with properties failed; retrying without properties: " + err.Error())
+			req.Properties = nil
+			resp, err = client.CreatePage(bgCtx, req)
+		}
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
 	}
 
 	pageID := resp.ID
@@ -621,4 +708,17 @@ func rewriteLocalImages(sourceFile, markdown, flagBaseURL, flagAssetRoot string)
 		return "", 0, err
 	}
 	return rewritten, len(rewrites), nil
+}
+
+func handlePropertyParseErrors(mode cli.PropertyMode, errs []error) error {
+	if len(errs) == 0 {
+		return nil
+	}
+	if mode == cli.PropertyModeStrict {
+		return fmt.Errorf("property parsing failed: %w", errs[0])
+	}
+	for _, err := range errs {
+		output.PrintWarning(err.Error())
+	}
+	return nil
 }

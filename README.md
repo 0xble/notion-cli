@@ -1,3 +1,7 @@
+---
+notion-id: 3141c3ac-906d-810c-aef9-ee3a4015bcd1
+---
+
 # notion-cli
 
 [![Go Version](https://img.shields.io/badge/go-%3E%3D1.22-blue)](https://golang.org/)
@@ -76,12 +80,16 @@ notion-cli page upload ./document.md --title "Custom Title" # Explicit title
 notion-cli page upload ./document.md --parent "Engineering" # Parent by name or ID
 notion-cli page upload ./document.md --icon "📄"             # Set emoji icon
 notion-cli page upload ./document.md --asset-base-url "https://cdn.example.com/docs" # Rewrite local image embeds
+notion-cli page upload ./document.md --props "Status=Todo;Priority=High"
 
 # Sync a markdown file (create or update)
 notion-cli page sync ./document.md                          # Creates page, writes notion-id to frontmatter
 notion-cli page sync ./document.md                          # Updates page using notion-id from frontmatter
 notion-cli page sync ./document.md --parent "Engineering"   # Set parent on first sync
 notion-cli page sync ./document.md --asset-base-url "https://cdn.example.com/docs"
+notion-cli page sync ./document.md --props "Status=Todo;Priority=High"
+notion-cli page sync ./document.md --prop "Priority=Urgent" # --prop overrides values set via --props/frontmatter
+notion-cli page sync ./document.md --property-mode off      # Disable property sync
 
 # Edit an existing page
 notion-cli page edit <url> --replace "New content"                      # Replace all content
@@ -159,6 +167,18 @@ notion-cli page sync ./notes.md \
 ```
 
 This works well with static hosts such as miniserve.
+
+## Property Sync
+
+`page sync` and `page upload` can send property updates along with content.
+
+- `--property-mode warn` (default): attempt property sync, continue on property errors.
+- `--property-mode strict`: fail on property parse/update/create errors.
+- `--property-mode off`: disable property sync completely.
+- `--props "A=1;B=2"`: set multiple properties in one flag.
+- `--prop "A=1"`: set a single property (repeatable, overrides `--props`).
+
+For `page sync`, top-level frontmatter keys (excluding `notion-id`/`notion`) are also treated as property candidates.
 
 ## How It Works
 
