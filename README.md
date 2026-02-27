@@ -53,10 +53,15 @@ notion-cli page create --title "New Page" --content "# Hello World"
 ### Authentication
 
 ```bash
-notion-cli auth login      # Authenticate with Notion via OAuth
-notion-cli auth refresh    # Refresh the access token
-notion-cli auth status     # Show authentication status
-notion-cli auth logout     # Clear stored credentials
+notion-cli auth login                          # Authenticate with Notion via OAuth (default account)
+notion-cli auth login --account work           # Authenticate a named account
+notion-cli auth refresh --account work         # Refresh one account token
+notion-cli auth status                         # Show current account status
+notion-cli auth status --all                   # Show all accounts
+notion-cli auth list                           # List saved accounts
+notion-cli auth use work                       # Set active account
+notion-cli auth logout --account work          # Clear one account token
+notion-cli auth logout --all                   # Clear all account tokens
 ```
 
 ### Pages
@@ -133,7 +138,12 @@ notion-cli --help                              # Show help
 
 ## Configuration
 
-Configuration is stored at `~/.config/notion-cli/config.json`.
+Configuration is stored at:
+
+- `~/.config/notion-cli/config.json` (active account selection)
+- `~/.config/notion-cli/accounts/<account>.json` (OAuth tokens per account)
+
+Legacy `~/.config/notion-cli/token.json` is migrated automatically to `accounts/default.json` for backward compatibility.
 
 The CLI uses Notion's remote MCP server with OAuth authentication. On first run, `notion-cli auth login` will open your browser to authorize the CLI with your Notion workspace.
 
@@ -144,6 +154,7 @@ The CLI uses Notion's remote MCP server with OAuth authentication. On first run,
 | Variable | Description |
 |----------|-------------|
 | `NOTION_ACCESS_TOKEN` | Access token for CI/headless usage (skips OAuth) |
+| `NOTION_ACCOUNT` | Account profile to use (`default` fallback when unset) |
 | `NOTION_CLI_ASSET_BASE_URL` | Base URL for rewriting local markdown image embeds during `page upload`/`page sync` |
 | `NOTION_CLI_ASSET_ROOT` | Optional local root mapped to `NOTION_CLI_ASSET_BASE_URL` when building image URLs |
 

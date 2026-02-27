@@ -10,9 +10,14 @@ import (
 )
 
 var accessToken string
+var account string
 
 func SetAccessToken(token string) {
 	accessToken = token
+}
+
+func SetAccount(name string) {
+	account = name
 }
 
 func GetClient() (*mcp.Client, error) {
@@ -29,6 +34,9 @@ func GetClient() (*mcp.Client, error) {
 	var opts []mcp.ClientOption
 	if accessToken != "" {
 		opts = append(opts, mcp.WithAccessToken(accessToken))
+	}
+	if account != "" {
+		opts = append(opts, mcp.WithAccount(account))
 	}
 
 	client, err := mcp.NewClient(opts...)
@@ -48,7 +56,7 @@ func GetClient() (*mcp.Client, error) {
 }
 
 func autoRefreshIfNeeded(ctx context.Context) error {
-	tokenStore, err := mcp.NewFileTokenStore()
+	tokenStore, err := mcp.NewFileTokenStoreForAccount(account)
 	if err != nil {
 		return err
 	}

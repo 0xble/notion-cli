@@ -29,12 +29,15 @@ Or see: https://github.com/lox/notion-cli
 The CLI uses OAuth authentication. On first use, it opens a browser for authorization:
 
 ```bash
-notion-cli auth login      # Authenticate with Notion
-notion-cli auth status     # Check authentication status
-notion-cli auth logout     # Clear credentials
+notion-cli auth login                      # Authenticate with Notion (default account)
+notion-cli auth login --account work       # Authenticate a named account
+notion-cli auth status --all               # Show all account statuses
+notion-cli auth list                       # List saved accounts
+notion-cli auth use work                   # Set active account
+notion-cli auth logout --account work      # Clear one account token
 ```
 
-For CI/headless environments, set `NOTION_ACCESS_TOKEN` environment variable.
+For CI/headless environments, set `NOTION_ACCESS_TOKEN`. You can also choose profiles via `--account` or `NOTION_ACCOUNT`.
 
 ## Available Commands
 

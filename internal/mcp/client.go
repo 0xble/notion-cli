@@ -29,6 +29,7 @@ type ClientOption func(*clientConfig)
 type clientConfig struct {
 	endpoint    string
 	accessToken string
+	account     string
 }
 
 func WithEndpoint(endpoint string) ClientOption {
@@ -43,6 +44,12 @@ func WithAccessToken(token string) ClientOption {
 	}
 }
 
+func WithAccount(account string) ClientOption {
+	return func(c *clientConfig) {
+		c.account = account
+	}
+}
+
 func NewClient(opts ...ClientOption) (*Client, error) {
 	cfg := &clientConfig{
 		endpoint: DefaultEndpoint,
@@ -51,7 +58,7 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 		opt(cfg)
 	}
 
-	tokenStore, err := NewFileTokenStore()
+	tokenStore, err := NewFileTokenStoreForAccount(cfg.account)
 	if err != nil {
 		return nil, fmt.Errorf("create token store: %w", err)
 	}
