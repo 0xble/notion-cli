@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/lox/notion-cli/internal/api"
 	"github.com/lox/notion-cli/internal/cli"
 	"github.com/lox/notion-cli/internal/mcp"
 	"github.com/lox/notion-cli/internal/output"
@@ -130,15 +131,22 @@ type PageCreateCmd struct {
 	Title   string `help:"Page title" short:"t" required:""`
 	Parent  string `help:"Parent page URL, name, or ID" short:"p"`
 	Content string `help:"Page content (markdown)" short:"c"`
+	Icon    string `help:"Page icon (emoji, https URL, or 'none' to clear)" short:"i"`
 	JSON    bool   `help:"Output as JSON" short:"j"`
 }
 
 func (c *PageCreateCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runPageCreate(ctx, c.Title, c.Parent, c.Content)
+	return runPageCreate(ctx, c.Title, c.Parent, c.Content, c.Icon)
 }
 
-func runPageCreate(ctx *Context, title, parent, content string) error {
+func runPageCreate(ctx *Context, title, parent, content, icon string) error {
+	explicitIcon, parsedIcon, err := parseExplicitIcon(icon)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
 	client, err := cli.RequireClient()
 	if err != nil {
 		return err
@@ -169,11 +177,22 @@ func runPageCreate(ctx *Context, title, parent, content string) error {
 		return err
 	}
 
+	pageID := pageIDFromCreateResponse(resp)
+	if explicitIcon {
+		if pageID == "" {
+			output.PrintWarning("Page created but could not retrieve ID to apply icon")
+		} else if err := setPageIcon(bgCtx, pageID, parsedIcon); err != nil {
+			output.PrintError(err)
+			return err
+		}
+	}
+
 	if ctx.JSON {
 		outPage := output.Page{
-			ID:    resp.ID,
+			ID:    pageID,
 			URL:   resp.URL,
 			Title: title,
+			Icon:  outputIconValue(icon, explicitIcon, parsedIcon),
 		}
 		return output.PrintPage(outPage, true)
 	}
@@ -190,7 +209,7 @@ type PageUploadCmd struct {
 	File         string   `arg:"" help:"Markdown file to upload" type:"existingfile"`
 	Title        string   `help:"Page title (default: filename or first heading)" short:"t"`
 	Parent       string   `help:"Parent page URL, name, or ID" short:"p"`
-	Icon         string   `help:"Emoji icon for the page" short:"i"`
+	Icon         string   `help:"Page icon (emoji, https URL, or 'none' to clear)" short:"i"`
 	JSON         bool     `help:"Output as JSON" short:"j"`
 	AssetBaseURL string   `help:"Base URL used to rewrite local image embeds (or NOTION_CLI_ASSET_BASE_URL)"`
 	AssetRoot    string   `help:"Local asset root mapped to --asset-base-url (or NOTION_CLI_ASSET_ROOT)"`
@@ -205,6 +224,12 @@ func (c *PageUploadCmd) Run(ctx *Context) error {
 }
 
 func runPageUpload(ctx *Context, file, title, parent, icon, assetBaseURL, assetRoot, propertyModeRaw string, propsFlags, propFlags []string) error {
+	explicitIcon, parsedIcon, err := parseExplicitIcon(icon)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
 	content, err := os.ReadFile(file)
 	if err != nil {
 		output.PrintError(err)
@@ -286,17 +311,24 @@ func runPageUpload(ctx *Context, file, title, parent, icon, assetBaseURL, assetR
 		}
 	}
 
-	displayTitle := title
-	if icon != "" {
-		displayTitle = icon + " " + title
+	pageID := pageIDFromCreateResponse(resp)
+	if explicitIcon {
+		if pageID == "" {
+			output.PrintWarning("Page created but could not retrieve ID to apply icon")
+		} else if err := setPageIcon(bgCtx, pageID, parsedIcon); err != nil {
+			output.PrintError(err)
+			return err
+		}
 	}
+
+	displayTitle := titleWithIcon(title, icon)
 
 	if ctx.JSON {
 		outPage := output.Page{
-			ID:    resp.ID,
+			ID:    pageID,
 			URL:   resp.URL,
 			Title: displayTitle,
-			Icon:  icon,
+			Icon:  outputIconValue(icon, explicitIcon, parsedIcon),
 		}
 		return output.PrintPage(outPage, true)
 	}
@@ -340,13 +372,20 @@ type PageEditCmd struct {
 	Find        string `help:"Text to find (use ... for ellipsis)"`
 	ReplaceWith string `help:"Text to replace with (requires --find)" name:"replace-with"`
 	Append      string `help:"Append text after selection (requires --find)"`
+	Icon        string `help:"Page icon (emoji, https URL, or 'none' to clear)"`
 }
 
 func (c *PageEditCmd) Run(ctx *Context) error {
-	return runPageEdit(ctx, c.Page, c.Replace, c.Find, c.ReplaceWith, c.Append)
+	return runPageEdit(ctx, c.Page, c.Replace, c.Find, c.ReplaceWith, c.Append, c.Icon)
 }
 
-func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText string) error {
+func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText, icon string) error {
+	explicitIcon, parsedIcon, err := parseExplicitIcon(icon)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
 	if replace != "" && (find != "" || replaceWith != "" || appendText != "") {
 		return &output.UserError{Message: "use --replace alone, or --find with --replace-with/--append"}
 	}
@@ -356,19 +395,24 @@ func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText stri
 	if replaceWith != "" && appendText != "" {
 		return &output.UserError{Message: "use either --replace-with or --append with --find"}
 	}
-
-	client, err := cli.RequireClient()
-	if err != nil {
-		return err
+	needsContentUpdate := replace != "" || (find != "" && (replaceWith != "" || appendText != ""))
+	if !needsContentUpdate && !explicitIcon {
+		return &output.UserError{Message: "specify --replace, --find with --replace-with/--append, or --icon"}
 	}
-	defer func() { _ = client.Close() }()
 
 	bgCtx := context.Background()
 
 	ref := cli.ParsePageRef(page)
-	pageID := page
+	pageID := ref.ID
+	var client *mcp.Client
 	switch ref.Kind {
 	case cli.RefName:
+		client, err = cli.RequireClient()
+		if err != nil {
+			return err
+		}
+		defer func() { _ = client.Close() }()
+
 		resolved, err := cli.ResolvePageID(bgCtx, client, page)
 		if err != nil {
 			output.PrintError(err)
@@ -377,33 +421,59 @@ func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText stri
 		pageID = resolved
 	case cli.RefID:
 		pageID = ref.ID
+	case cli.RefURL:
+		if extractedID, ok := cli.ExtractNotionUUID(page); ok {
+			pageID = extractedID
+			break
+		}
+		return &output.UserError{Message: fmt.Sprintf("could not extract page ID from URL: %s\nUse the page ID directly instead.", page)}
 	}
 
-	var req mcp.UpdatePageRequest
-	req.PageID = pageID
+	if needsContentUpdate {
+		if client == nil {
+			client, err = cli.RequireClient()
+			if err != nil {
+				return err
+			}
+			defer func() { _ = client.Close() }()
+		}
+
+		req := mcp.UpdatePageRequest{PageID: pageID}
+		switch {
+		case replace != "":
+			req.Command = "replace_content"
+			req.NewContent = replace
+		case find != "" && replaceWith != "":
+			req.Command = "replace_content_range"
+			req.Selection = find
+			req.NewStr = replaceWith
+		case find != "" && appendText != "":
+			req.Command = "insert_content_after"
+			req.Selection = find
+			req.NewStr = appendText
+		}
+
+		if err := client.UpdatePage(bgCtx, req); err != nil {
+			output.PrintError(err)
+			return err
+		}
+	}
+
+	if explicitIcon {
+		if err := setPageIcon(bgCtx, pageID, parsedIcon); err != nil {
+			output.PrintError(err)
+			return err
+		}
+	}
 
 	switch {
-	case replace != "":
-		req.Command = "replace_content"
-		req.NewContent = replace
-	case find != "" && replaceWith != "":
-		req.Command = "replace_content_range"
-		req.Selection = find
-		req.NewStr = replaceWith
-	case find != "" && appendText != "":
-		req.Command = "insert_content_after"
-		req.Selection = find
-		req.NewStr = appendText
+	case needsContentUpdate && explicitIcon:
+		output.PrintSuccess("Page content and icon updated")
+	case needsContentUpdate:
+		output.PrintSuccess("Page updated")
 	default:
-		return &output.UserError{Message: "specify --replace, or --find with --replace-with or --append"}
+		output.PrintSuccess("Page icon updated")
 	}
-
-	if err := client.UpdatePage(bgCtx, req); err != nil {
-		output.PrintError(err)
-		return err
-	}
-
-	output.PrintSuccess("Page updated")
 	return nil
 }
 
@@ -491,7 +561,7 @@ type PageSyncCmd struct {
 	File         string   `arg:"" help:"Markdown file to sync" type:"existingfile"`
 	Title        string   `help:"Page title (default: filename or first heading)" short:"t"`
 	Parent       string   `help:"Parent page URL, name, or ID" short:"p"`
-	Icon         string   `help:"Emoji icon for the page" short:"i"`
+	Icon         string   `help:"Page icon (emoji, https URL, or 'none' to clear)" short:"i"`
 	JSON         bool     `help:"Output as JSON" short:"j"`
 	AssetBaseURL string   `help:"Base URL used to rewrite local image embeds (or NOTION_CLI_ASSET_BASE_URL)"`
 	AssetRoot    string   `help:"Local asset root mapped to --asset-base-url (or NOTION_CLI_ASSET_ROOT)"`
@@ -506,6 +576,12 @@ func (c *PageSyncCmd) Run(ctx *Context) error {
 }
 
 func runPageSync(ctx *Context, file, title, parent, icon, assetBaseURL, assetRoot, propertyModeRaw string, propsFlags, propFlags []string) error {
+	explicitIcon, parsedIcon, err := parseExplicitIcon(icon)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
 	raw, err := os.ReadFile(file)
 	if err != nil {
 		output.PrintError(err)
@@ -601,16 +677,19 @@ func runPageSync(ctx *Context, file, title, parent, icon, assetBaseURL, assetRoo
 			return err
 		}
 
-		displayTitle := title
-		if icon != "" {
-			displayTitle = icon + " " + title
+		if explicitIcon {
+			if err := setPageIcon(bgCtx, fm.NotionID, parsedIcon); err != nil {
+				output.PrintError(err)
+				return err
+			}
 		}
+		displayTitle := titleWithIcon(title, icon)
 
 		if ctx.JSON {
 			outPage := output.Page{
 				ID:    fm.NotionID,
 				Title: displayTitle,
-				Icon:  icon,
+				Icon:  outputIconValue(icon, explicitIcon, parsedIcon),
 			}
 			return output.PrintPage(outPage, true)
 		}
@@ -653,6 +732,15 @@ func runPageSync(ctx *Context, file, title, parent, icon, assetBaseURL, assetRoo
 	if pageID == "" && resp.URL != "" {
 		pageID, _ = cli.ExtractNotionUUID(resp.URL)
 	}
+
+	if explicitIcon {
+		if pageID == "" {
+			output.PrintWarning("Page created but could not retrieve ID to apply icon")
+		} else if err := setPageIcon(bgCtx, pageID, parsedIcon); err != nil {
+			output.PrintError(err)
+			return err
+		}
+	}
 	if pageID == "" {
 		output.PrintWarning("Page created but could not retrieve ID for frontmatter")
 	} else {
@@ -667,17 +755,14 @@ func runPageSync(ctx *Context, file, title, parent, icon, assetBaseURL, assetRoo
 		}
 	}
 
-	displayTitle := title
-	if icon != "" {
-		displayTitle = icon + " " + title
-	}
+	displayTitle := titleWithIcon(title, icon)
 
 	if ctx.JSON {
 		outPage := output.Page{
 			ID:    pageID,
 			URL:   resp.URL,
 			Title: displayTitle,
-			Icon:  icon,
+			Icon:  outputIconValue(icon, explicitIcon, parsedIcon),
 		}
 		return output.PrintPage(outPage, true)
 	}
@@ -721,4 +806,73 @@ func handlePropertyParseErrors(mode cli.PropertyMode, errs []error) error {
 		output.PrintWarning(err.Error())
 	}
 	return nil
+}
+
+func parseExplicitIcon(raw string) (bool, api.PageIcon, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return false, api.PageIcon{}, nil
+	}
+
+	icon, err := api.ParsePageIcon(raw)
+	if err != nil {
+		return false, api.PageIcon{}, &output.UserError{Message: err.Error()}
+	}
+
+	return true, icon, nil
+}
+
+func setPageIcon(ctx context.Context, pageID string, icon api.PageIcon) error {
+	client, err := cli.RequireOfficialAPIClient()
+	if err != nil {
+		return err
+	}
+	return client.SetPageIcon(ctx, pageID, icon)
+}
+
+func pageIDFromCreateResponse(resp *mcp.CreatePageResponse) string {
+	if resp == nil {
+		return ""
+	}
+	if resp.ID != "" {
+		return resp.ID
+	}
+	if resp.URL != "" {
+		if id, ok := cli.ExtractNotionUUID(resp.URL); ok {
+			return id
+		}
+	}
+	return ""
+}
+
+func outputIconValue(rawIcon string, explicit bool, parsed api.PageIcon) string {
+	if !explicit {
+		return rawIcon
+	}
+	switch {
+	case parsed.Clear:
+		return ""
+	case parsed.Emoji != "":
+		return parsed.Emoji
+	case parsed.ExternalURL != "":
+		return parsed.ExternalURL
+	default:
+		return rawIcon
+	}
+}
+
+func titleWithIcon(title, icon string) string {
+	icon = strings.TrimSpace(icon)
+	if icon == "" {
+		return title
+	}
+
+	runes := []rune(icon)
+	if len(runes) == 0 {
+		return title
+	}
+	if !cli.IsEmoji(runes[0]) {
+		return title
+	}
+	return icon + " " + title
 }

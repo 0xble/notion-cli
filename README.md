@@ -78,12 +78,15 @@ notion-cli page view <url> --json              # Output as JSON
 notion-cli page create --title "Title"         # Create a page
 notion-cli page create --title "T" --content "Body text"
 notion-cli page create --title "T" --parent <page-id>
+notion-cli page create --title "T" --icon "✅" # Set page icon
 
 # Upload a markdown file as a new page
 notion-cli page upload ./document.md                        # Title from # heading or filename
 notion-cli page upload ./document.md --title "Custom Title" # Explicit title
 notion-cli page upload ./document.md --parent "Engineering" # Parent by name or ID
 notion-cli page upload ./document.md --icon "📄"             # Set emoji icon
+notion-cli page upload ./document.md --icon "https://cdn.example.com/icon.png" # Set external icon URL
+notion-cli page upload ./document.md --icon "none"           # Clear icon
 notion-cli page upload ./document.md --asset-base-url "https://cdn.example.com/docs" # Rewrite local image embeds
 notion-cli page upload ./document.md --props "Status=Todo;Priority=High"
 
@@ -95,11 +98,15 @@ notion-cli page sync ./document.md --asset-base-url "https://cdn.example.com/doc
 notion-cli page sync ./document.md --props "Status=Todo;Priority=High"
 notion-cli page sync ./document.md --prop "Priority=Urgent" # --prop overrides values set via --props/frontmatter
 notion-cli page sync ./document.md --property-mode off      # Disable property sync
+notion-cli page sync ./document.md --icon "🔥"              # Set emoji icon
+notion-cli page sync ./document.md --icon "none"            # Clear icon
 
 # Edit an existing page
 notion-cli page edit <url> --replace "New content"                      # Replace all content
 notion-cli page edit <url> --find "old text" --replace-with "new text"  # Find and replace
 notion-cli page edit <url> --find "section" --append "extra content"    # Append after match
+notion-cli page edit <url> --icon "✅"                                  # Update icon only
+notion-cli page edit <url> --replace "Body" --icon "none"               # Content + icon in one command
 ```
 
 ### Search
@@ -157,6 +164,9 @@ The CLI uses Notion's remote MCP server with OAuth authentication. On first run,
 | `NOTION_ACCOUNT` | Account profile to use (`default` fallback when unset) |
 | `NOTION_CLI_ASSET_BASE_URL` | Base URL for rewriting local markdown image embeds during `page upload`/`page sync` |
 | `NOTION_CLI_ASSET_ROOT` | Optional local root mapped to `NOTION_CLI_ASSET_BASE_URL` when building image URLs |
+| `NOTION_API_TOKEN` | Official Notion REST API token (required for `--icon`) |
+| `NOTION_API_BASE_URL` | Override Notion REST base URL (default `https://api.notion.com/v1`) |
+| `NOTION_API_NOTION_VERSION` | Override Notion-Version header (default `2022-06-28`) |
 
 ## Local Image Embeds
 
@@ -193,9 +203,12 @@ For `page sync`, top-level frontmatter keys (excluding `notion-id`/`notion`) are
 
 ## How It Works
 
-This CLI connects to [Notion's remote MCP server](https://developers.notion.com/guides/mcp/mcp) at `https://mcp.notion.com/mcp` using the Model Context Protocol. This provides:
+This CLI connects to [Notion's remote MCP server](https://developers.notion.com/guides/mcp/mcp) at `https://mcp.notion.com/mcp` using the Model Context Protocol.
+For icon updates (`--icon`), it also uses Notion's official REST API (`https://api.notion.com/v1`) with `NOTION_API_TOKEN` / `api.token`.
 
-- **OAuth authentication** - No API tokens to manage
+MCP provides:
+
+- **OAuth authentication** for MCP operations
 - **Notion-flavoured Markdown** - Create/edit content naturally
 - **Semantic search** - Search across connected apps too
 - **Optimised for CLI** - Efficient responses

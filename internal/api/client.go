@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/lox/notion-cli/internal/config"
 )
@@ -23,6 +26,12 @@ type Client struct {
 	baseURL       string
 	notionVersion string
 	token         string
+}
+
+type PageIcon struct {
+	Emoji       string
+	ExternalURL string
+	Clear       bool
 }
 
 func NewClient(cfg config.APIConfig, token string) (*Client, error) {
@@ -60,6 +69,103 @@ func (c *Client) PatchPage(ctx context.Context, pageID string, patch map[string]
 	}
 
 	return c.doJSON(ctx, http.MethodPatch, "/pages/"+pageID, patch, nil)
+}
+
+func ParsePageIcon(value string) (PageIcon, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return PageIcon{}, fmt.Errorf("icon value is required")
+	}
+
+	switch strings.ToLower(value) {
+	case "none", "clear":
+		return PageIcon{Clear: true}, nil
+	}
+
+	if strings.HasPrefix(strings.ToLower(value), "http://") || strings.HasPrefix(strings.ToLower(value), "https://") {
+		parsedURL, err := url.Parse(value)
+		if err != nil {
+			return PageIcon{}, fmt.Errorf("invalid icon URL: %w", err)
+		}
+		if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+			return PageIcon{}, fmt.Errorf("icon URL must use http or https")
+		}
+		if parsedURL.Host == "" {
+			return PageIcon{}, fmt.Errorf("icon URL must include a host")
+		}
+		return PageIcon{ExternalURL: value}, nil
+	}
+
+	firstRune, _ := utf8.DecodeRuneInString(value)
+	if firstRune == utf8.RuneError {
+		return PageIcon{}, fmt.Errorf("invalid icon value")
+	}
+	if !isLikelyEmoji(firstRune) {
+		return PageIcon{}, fmt.Errorf("icon must be an emoji, an http(s) URL, or 'none'")
+	}
+
+	return PageIcon{Emoji: value}, nil
+}
+
+func (c *Client) SetPageIcon(ctx context.Context, pageID string, icon PageIcon) error {
+	pageID = strings.TrimSpace(pageID)
+	if pageID == "" {
+		return fmt.Errorf("page ID is required")
+	}
+
+	setCount := 0
+	if strings.TrimSpace(icon.Emoji) != "" {
+		setCount++
+	}
+	if strings.TrimSpace(icon.ExternalURL) != "" {
+		setCount++
+	}
+	if icon.Clear {
+		setCount++
+	}
+	if setCount != 1 {
+		return fmt.Errorf("icon must set exactly one of emoji, external URL, or clear")
+	}
+
+	var patch map[string]any
+	switch {
+	case icon.Clear:
+		patch = map[string]any{
+			"icon": nil,
+		}
+	case strings.TrimSpace(icon.ExternalURL) != "":
+		parsedURL, err := url.Parse(icon.ExternalURL)
+		if err != nil {
+			return fmt.Errorf("invalid icon URL: %w", err)
+		}
+		if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+			return fmt.Errorf("icon URL must use http or https")
+		}
+		if parsedURL.Host == "" {
+			return fmt.Errorf("icon URL must include a host")
+		}
+		patch = map[string]any{
+			"icon": map[string]any{
+				"type": "external",
+				"external": map[string]any{
+					"url": icon.ExternalURL,
+				},
+			},
+		}
+	default:
+		patch = map[string]any{
+			"icon": map[string]any{
+				"type":  "emoji",
+				"emoji": icon.Emoji,
+			},
+		}
+	}
+
+	return c.PatchPage(ctx, pageID, patch)
+}
+
+func isLikelyEmoji(r rune) bool {
+	return !unicode.IsLetter(r) && !unicode.IsDigit(r) && !unicode.IsSpace(r) && !unicode.IsPunct(r) && r > 127
 }
 
 func (c *Client) doJSON(ctx context.Context, method, path string, payload any, out any) error {
