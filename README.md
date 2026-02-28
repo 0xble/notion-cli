@@ -83,6 +83,9 @@ notion-cli page sync ./document.md                          # Updates page using
 notion-cli page sync ./document.md --parent "Engineering"   # Set parent on first sync
 notion-cli page sync ./document.md --parent-db <db-id>      # Sync as database entry
 
+# Local image paths like ./image.png are uploaded via official API fallback during upload/sync
+# when detected in markdown content. Requires NOTION_API_TOKEN.
+
 # Edit an existing page
 notion-cli page edit <url> --replace "New content"                      # Replace all content
 notion-cli page edit <url> --find "old text" --replace-with "new text"  # Find and replace

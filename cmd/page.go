@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/lox/notion-cli/internal/api"
 	"github.com/lox/notion-cli/internal/cli"
 	"github.com/lox/notion-cli/internal/mcp"
 	"github.com/lox/notion-cli/internal/output"
@@ -206,6 +207,15 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) err
 	}
 
 	markdown := string(content)
+	bgCtx := context.Background()
+	localUploads, err := maybeUploadLocalImages(bgCtx, file, markdown, "", "")
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+	if len(localUploads) > 0 {
+		output.PrintInfo(fmt.Sprintf("Uploaded %d local image(s) via Notion REST file uploads", len(localUploads)))
+	}
 
 	if title == "" {
 		title = extractTitleFromMarkdown(markdown)
@@ -223,8 +233,6 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) err
 		return err
 	}
 	defer func() { _ = client.Close() }()
-
-	bgCtx := context.Background()
 
 	req := mcp.CreatePageRequest{
 		Title:   title,
@@ -257,6 +265,15 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) err
 		output.PrintError(err)
 		return err
 	}
+	pageID := pageIDFromCreateResponse(resp)
+	if len(localUploads) > 0 {
+		if pageID == "" {
+			output.PrintWarning("Page created but could not retrieve ID to append uploaded local images")
+		} else if err := appendUploadedLocalImages(bgCtx, pageID, localUploads); err != nil {
+			output.PrintError(err)
+			return err
+		}
+	}
 
 	displayTitle := title
 	if icon != "" {
@@ -265,7 +282,7 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) err
 
 	if ctx.JSON {
 		outPage := output.Page{
-			ID:    resp.ID,
+			ID:    pageID,
 			URL:   resp.URL,
 			Title: displayTitle,
 			Icon:  icon,
@@ -392,6 +409,15 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 
 	content := string(raw)
 	fm, body := cli.ParseFrontmatter(content)
+	bgCtx := context.Background()
+	localUploads, err := maybeUploadLocalImages(bgCtx, file, body, "", "")
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+	if len(localUploads) > 0 {
+		output.PrintInfo(fmt.Sprintf("Uploaded %d local image(s) via Notion REST file uploads", len(localUploads)))
+	}
 
 	if title == "" {
 		title = extractTitleFromMarkdown(body)
@@ -409,8 +435,6 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 	}
 	defer func() { _ = client.Close() }()
 
-	bgCtx := context.Background()
-
 	if fm.NotionID != "" {
 		req := mcp.UpdatePageRequest{
 			PageID:     fm.NotionID,
@@ -420,6 +444,12 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 		if err := client.UpdatePage(bgCtx, req); err != nil {
 			output.PrintError(err)
 			return err
+		}
+		if len(localUploads) > 0 {
+			if err := appendUploadedLocalImages(bgCtx, fm.NotionID, localUploads); err != nil {
+				output.PrintError(err)
+				return err
+			}
 		}
 
 		displayTitle := title
@@ -472,9 +502,14 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 		return err
 	}
 
-	pageID := resp.ID
-	if pageID == "" && resp.URL != "" {
-		pageID, _ = cli.ExtractNotionUUID(resp.URL)
+	pageID := pageIDFromCreateResponse(resp)
+	if len(localUploads) > 0 {
+		if pageID == "" {
+			output.PrintWarning("Page created but could not retrieve ID to append uploaded local images")
+		} else if err := appendUploadedLocalImages(bgCtx, pageID, localUploads); err != nil {
+			output.PrintError(err)
+			return err
+		}
 	}
 	if pageID == "" {
 		output.PrintWarning("Page created but could not retrieve ID for frontmatter")
@@ -510,4 +545,89 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 		output.PrintInfo(resp.URL)
 	}
 	return nil
+}
+
+type uploadedLocalImage struct {
+	Alt          string
+	FileUploadID string
+	ResolvedPath string
+}
+
+func maybeUploadLocalImages(ctx context.Context, sourceFile, markdown, assetBaseURL, _ string) ([]uploadedLocalImage, error) {
+	if strings.TrimSpace(assetBaseURL) != "" {
+		return nil, nil
+	}
+
+	images, err := cli.FindLocalMarkdownImages(markdown, sourceFile)
+	if err != nil {
+		return nil, err
+	}
+	if len(images) == 0 {
+		return nil, nil
+	}
+
+	apiClient, err := cli.RequireOfficialAPIClient()
+	if err != nil {
+		return nil, err
+	}
+
+	uploadIDByPath := make(map[string]string, len(images))
+	uploads := make([]uploadedLocalImage, 0, len(images))
+	for _, image := range images {
+		uploadID, ok := uploadIDByPath[image.Resolved]
+		if !ok {
+			fileData, err := os.ReadFile(image.Resolved)
+			if err != nil {
+				return nil, fmt.Errorf("read local image %q: %w", image.Resolved, err)
+			}
+			uploadID, err = apiClient.UploadFile(ctx, filepath.Base(image.Resolved), fileData)
+			if err != nil {
+				return nil, fmt.Errorf("upload local image %q: %w", image.Resolved, err)
+			}
+			uploadIDByPath[image.Resolved] = uploadID
+		}
+
+		uploads = append(uploads, uploadedLocalImage{
+			Alt:          image.Alt,
+			FileUploadID: uploadID,
+			ResolvedPath: image.Resolved,
+		})
+	}
+
+	return uploads, nil
+}
+
+func appendUploadedLocalImages(ctx context.Context, pageID string, uploads []uploadedLocalImage) error {
+	if strings.TrimSpace(pageID) == "" || len(uploads) == 0 {
+		return nil
+	}
+
+	apiClient, err := cli.RequireOfficialAPIClient()
+	if err != nil {
+		return err
+	}
+
+	blocks := make([]api.UploadedImageBlock, 0, len(uploads))
+	for _, upload := range uploads {
+		blocks = append(blocks, api.UploadedImageBlock{
+			FileUploadID: upload.FileUploadID,
+			Caption:      upload.Alt,
+		})
+	}
+
+	return apiClient.AppendUploadedImageBlocks(ctx, pageID, blocks)
+}
+
+func pageIDFromCreateResponse(resp *mcp.CreatePageResponse) string {
+	if resp == nil {
+		return ""
+	}
+	if strings.TrimSpace(resp.ID) != "" {
+		return strings.TrimSpace(resp.ID)
+	}
+	if strings.TrimSpace(resp.URL) == "" {
+		return ""
+	}
+	id, _ := cli.ExtractNotionUUID(resp.URL)
+	return id
 }
