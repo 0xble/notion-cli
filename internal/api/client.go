@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -16,6 +18,7 @@ import (
 const (
 	defaultBaseURL      = "https://api.notion.com/v1"
 	defaultNotionAPIRev = "2022-06-28"
+	fileUploadAPIRev    = "2025-09-03"
 )
 
 type Client struct {
@@ -23,6 +26,16 @@ type Client struct {
 	baseURL       string
 	notionVersion string
 	token         string
+}
+
+type FileUpload struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+}
+
+type UploadedImageBlock struct {
+	FileUploadID string
+	Caption      string
 }
 
 func NewClient(cfg config.APIConfig, token string) (*Client, error) {
@@ -62,7 +75,105 @@ func (c *Client) PatchPage(ctx context.Context, pageID string, patch map[string]
 	return c.doJSON(ctx, http.MethodPatch, "/pages/"+pageID, patch, nil)
 }
 
+func (c *Client) UploadFile(ctx context.Context, filename string, data []byte) (string, error) {
+	filename = strings.TrimSpace(filename)
+	if filename == "" {
+		return "", fmt.Errorf("filename is required")
+	}
+	if len(data) == 0 {
+		return "", fmt.Errorf("file data is required")
+	}
+
+	filename = filepath.Base(filename)
+
+	var created FileUpload
+	createPayload := map[string]any{
+		"mode":     "single_part",
+		"filename": filename,
+	}
+	if err := c.doJSONWithVersion(ctx, http.MethodPost, "/file_uploads", createPayload, &created, fileUploadAPIRev); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(created.ID) == "" {
+		return "", fmt.Errorf("create file upload failed: empty upload ID")
+	}
+
+	sent, err := c.sendFileUploadPart(ctx, created.ID, filename, data)
+	if err != nil {
+		return "", err
+	}
+
+	uploaded, err := c.waitForFileUploadUploaded(ctx, sent.ID)
+	if err != nil {
+		return "", err
+	}
+	return uploaded.ID, nil
+}
+
+func (c *Client) GetFileUpload(ctx context.Context, fileUploadID string) (*FileUpload, error) {
+	fileUploadID = strings.TrimSpace(fileUploadID)
+	if fileUploadID == "" {
+		return nil, fmt.Errorf("file upload ID is required")
+	}
+	var out FileUpload
+	if err := c.doJSONWithVersion(ctx, http.MethodGet, "/file_uploads/"+fileUploadID, nil, &out, fileUploadAPIRev); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(out.ID) == "" {
+		out.ID = fileUploadID
+	}
+	return &out, nil
+}
+
+func (c *Client) AppendUploadedImageBlocks(ctx context.Context, parentID string, blocks []UploadedImageBlock) error {
+	parentID = strings.TrimSpace(parentID)
+	if parentID == "" {
+		return fmt.Errorf("parent ID is required")
+	}
+	if len(blocks) == 0 {
+		return nil
+	}
+
+	children := make([]map[string]any, 0, len(blocks))
+	for _, block := range blocks {
+		id := strings.TrimSpace(block.FileUploadID)
+		if id == "" {
+			return fmt.Errorf("file upload ID is required for image block")
+		}
+
+		image := map[string]any{
+			"type": "file_upload",
+			"file_upload": map[string]any{
+				"id": id,
+			},
+		}
+		if caption := strings.TrimSpace(block.Caption); caption != "" {
+			image["caption"] = []map[string]any{
+				{
+					"type": "text",
+					"text": map[string]any{
+						"content": caption,
+					},
+				},
+			}
+		}
+
+		children = append(children, map[string]any{
+			"object": "block",
+			"type":   "image",
+			"image":  image,
+		})
+	}
+
+	payload := map[string]any{"children": children}
+	return c.doJSONWithVersion(ctx, http.MethodPatch, "/blocks/"+parentID+"/children", payload, nil, fileUploadAPIRev)
+}
+
 func (c *Client) doJSON(ctx context.Context, method, path string, payload any, out any) error {
+	return c.doJSONWithVersion(ctx, method, path, payload, out, c.notionVersion)
+}
+
+func (c *Client) doJSONWithVersion(ctx context.Context, method, path string, payload any, out any, notionVersion string) error {
 	var bodyReader io.Reader
 	if payload != nil {
 		data, err := json.Marshal(payload)
@@ -72,15 +183,23 @@ func (c *Client) doJSON(ctx context.Context, method, path string, payload any, o
 		bodyReader = bytes.NewReader(data)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bodyReader)
+	contentType := ""
+	if payload != nil {
+		contentType = "application/json"
+	}
+	return c.doRequest(ctx, method, path, bodyReader, contentType, out, notionVersion)
+}
+
+func (c *Client) doRequest(ctx context.Context, method, path string, body io.Reader, contentType string, out any, notionVersion string) error {
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("accept", "application/json")
 	req.Header.Set("authorization", "Bearer "+c.token)
-	req.Header.Set("notion-version", c.notionVersion)
-	if payload != nil {
-		req.Header.Set("content-type", "application/json")
+	req.Header.Set("notion-version", notionVersion)
+	if contentType != "" {
+		req.Header.Set("content-type", contentType)
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -116,4 +235,63 @@ func (c *Client) doJSON(ctx context.Context, method, path string, payload any, o
 		return fmt.Errorf("parse official API response for %s %s: %w", method, path, err)
 	}
 	return nil
+}
+
+func (c *Client) sendFileUploadPart(ctx context.Context, fileUploadID, filename string, data []byte) (*FileUpload, error) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+
+	part, err := writer.CreateFormFile("file", filename)
+	if err != nil {
+		return nil, fmt.Errorf("create multipart file part: %w", err)
+	}
+	if _, err := part.Write(data); err != nil {
+		return nil, fmt.Errorf("write multipart file data: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("close multipart writer: %w", err)
+	}
+
+	var out FileUpload
+	path := "/file_uploads/" + strings.TrimSpace(fileUploadID) + "/send"
+	if err := c.doRequest(ctx, http.MethodPost, path, bytes.NewReader(body.Bytes()), writer.FormDataContentType(), &out, fileUploadAPIRev); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(out.ID) == "" {
+		out.ID = strings.TrimSpace(fileUploadID)
+	}
+	return &out, nil
+}
+
+func (c *Client) waitForFileUploadUploaded(ctx context.Context, fileUploadID string) (*FileUpload, error) {
+	id := strings.TrimSpace(fileUploadID)
+	if id == "" {
+		return nil, fmt.Errorf("file upload ID is required")
+	}
+
+	const maxChecks = 20
+	for i := 0; i < maxChecks; i++ {
+		upload, err := c.GetFileUpload(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+
+		status := strings.ToLower(strings.TrimSpace(upload.Status))
+		switch status {
+		case "", "uploaded":
+			return upload, nil
+		case "pending":
+			if i == maxChecks-1 {
+				return nil, fmt.Errorf("file upload %s did not reach uploaded status in time", id)
+			}
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(250 * time.Millisecond):
+			}
+		default:
+			return nil, fmt.Errorf("file upload %s failed with status %q", id, upload.Status)
+		}
+	}
+	return nil, fmt.Errorf("file upload %s did not reach uploaded status in time", id)
 }
