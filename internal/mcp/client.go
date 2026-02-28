@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/client"
@@ -230,6 +231,7 @@ type CreatePageRequest struct {
 	ParentDatabaseID string
 	Title            string
 	Content          string
+	Properties       map[string]string
 }
 
 type CreatePageResponse struct {
@@ -238,10 +240,14 @@ type CreatePageResponse struct {
 }
 
 func (c *Client) CreatePage(ctx context.Context, req CreatePageRequest) (*CreatePageResponse, error) {
+	props := map[string]any{}
+	for k, v := range req.Properties {
+		props[k] = v
+	}
+	props["title"] = req.Title
+
 	pageSpec := map[string]any{
-		"properties": map[string]any{
-			"title": req.Title,
-		},
+		"properties": props,
 	}
 
 	if req.Content != "" {
@@ -290,6 +296,24 @@ func extractURLFromText(text string) string {
 		return text[idx:end]
 	}
 	return ""
+}
+
+// ResolveDataSourceID fetches a database by ID and extracts the data source ID
+// from the collection:// URL in the content. If the ID is already a data source ID,
+// it's returned as-is (the fetch will fail, and we fall back).
+func (c *Client) ResolveDataSourceID(ctx context.Context, id string) (string, error) {
+	result, err := c.Fetch(ctx, id)
+	if err != nil {
+		return id, nil // assume it's already a data source ID
+	}
+
+	// Look for collection://UUID pattern in the content
+	re := regexp.MustCompile(`collection://([a-fA-F0-9-]{32,36})`)
+	if m := re.FindStringSubmatch(result.Content); m != nil {
+		return m[1], nil
+	}
+
+	return id, nil // fallback to original ID
 }
 
 type UpdatePageRequest struct {
