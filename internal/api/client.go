@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -23,6 +24,11 @@ type Client struct {
 	baseURL       string
 	notionVersion string
 	token         string
+}
+
+type PagePropertyMeta struct {
+	ID   string `json:"id"`
+	Type string `json:"type"`
 }
 
 func NewClient(cfg config.APIConfig, token string) (*Client, error) {
@@ -60,6 +66,71 @@ func (c *Client) PatchPage(ctx context.Context, pageID string, patch map[string]
 	}
 
 	return c.doJSON(ctx, http.MethodPatch, "/pages/"+pageID, patch, nil)
+}
+
+func (c *Client) RetrievePageProperties(ctx context.Context, pageID string) (map[string]PagePropertyMeta, error) {
+	pageID = strings.TrimSpace(pageID)
+	if pageID == "" {
+		return nil, fmt.Errorf("page ID is required")
+	}
+
+	var resp struct {
+		Properties map[string]PagePropertyMeta `json:"properties"`
+	}
+	if err := c.doJSON(ctx, http.MethodGet, "/pages/"+pageID, nil, &resp); err != nil {
+		return nil, err
+	}
+	if resp.Properties == nil {
+		return map[string]PagePropertyMeta{}, nil
+	}
+	return resp.Properties, nil
+}
+
+func (c *Client) RetrievePagePropertyItems(ctx context.Context, pageID, propertyID string) ([]any, error) {
+	pageID = strings.TrimSpace(pageID)
+	propertyID = strings.TrimSpace(propertyID)
+	if pageID == "" {
+		return nil, fmt.Errorf("page ID is required")
+	}
+	if propertyID == "" {
+		return nil, fmt.Errorf("property ID is required")
+	}
+
+	escapedPropertyID := url.PathEscape(propertyID)
+	basePath := "/pages/" + pageID + "/properties/" + escapedPropertyID
+
+	items := make([]any, 0)
+	var cursor string
+	for {
+		path := basePath
+		if cursor != "" {
+			path += "?start_cursor=" + url.QueryEscape(cursor)
+		}
+
+		var resp map[string]any
+		if err := c.doJSON(ctx, http.MethodGet, path, nil, &resp); err != nil {
+			return nil, err
+		}
+
+		object, _ := resp["object"].(string)
+		if object == "list" {
+			if results, ok := resp["results"].([]any); ok {
+				items = append(items, results...)
+			}
+			hasMore, _ := resp["has_more"].(bool)
+			nextCursor, _ := resp["next_cursor"].(string)
+			if hasMore && strings.TrimSpace(nextCursor) != "" {
+				cursor = nextCursor
+				continue
+			}
+			break
+		}
+
+		items = append(items, resp)
+		break
+	}
+
+	return items, nil
 }
 
 func (c *Client) doJSON(ctx context.Context, method, path string, payload any, out any) error {

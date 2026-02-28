@@ -106,3 +106,109 @@ func TestPatchPageReturnsAPIErrorMessage(t *testing.T) {
 		t.Fatalf("expected unauthorized message, got: %v", err)
 	}
 }
+
+func TestRetrievePageProperties(t *testing.T) {
+	t.Parallel()
+
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"object":"page",
+			"properties":{
+				"People":{"id":"prop_people","type":"people"},
+				"Tags":{"id":"prop_tags","type":"multi_select"}
+			}
+		}`))
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(config.APIConfig{BaseURL: srv.URL}, "secret-token")
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	props, err := client.RetrievePageProperties(context.Background(), "page-id")
+	if err != nil {
+		t.Fatalf("retrieve page properties: %v", err)
+	}
+	if gotPath != "/pages/page-id" {
+		t.Fatalf("path mismatch: got %s", gotPath)
+	}
+	if props["People"].ID != "prop_people" {
+		t.Fatalf("people id mismatch: %#v", props["People"])
+	}
+}
+
+func TestRetrievePagePropertyItemsPaginated(t *testing.T) {
+	t.Parallel()
+
+	requests := 0
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		paths = append(paths, r.URL.RequestURI())
+		w.Header().Set("Content-Type", "application/json")
+		if requests == 1 {
+			_, _ = w.Write([]byte(`{
+				"object":"list",
+				"results":[{"id":"a"},{"id":"b"}],
+				"has_more":true,
+				"next_cursor":"cursor_2"
+			}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{
+			"object":"list",
+			"results":[{"id":"c"}],
+			"has_more":false,
+			"next_cursor":null
+		}`))
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(config.APIConfig{BaseURL: srv.URL}, "secret-token")
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	items, err := client.RetrievePagePropertyItems(context.Background(), "page-id", "prop-id")
+	if err != nil {
+		t.Fatalf("retrieve page property items: %v", err)
+	}
+	if len(items) != 3 {
+		t.Fatalf("items len mismatch: got %d", len(items))
+	}
+	if len(paths) != 2 || paths[0] != "/pages/page-id/properties/prop-id" || paths[1] != "/pages/page-id/properties/prop-id?start_cursor=cursor_2" {
+		t.Fatalf("unexpected request paths: %#v", paths)
+	}
+}
+
+func TestRetrievePagePropertyItemsSingleResponse(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"object":"property_item",
+			"id":"x",
+			"type":"number",
+			"number":42
+		}`))
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(config.APIConfig{BaseURL: srv.URL}, "secret-token")
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	items, err := client.RetrievePagePropertyItems(context.Background(), "page-id", "prop-id")
+	if err != nil {
+		t.Fatalf("retrieve page property items: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items len mismatch: got %d", len(items))
+	}
+}
