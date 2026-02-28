@@ -371,7 +371,9 @@ func (c *Client) UpdatePage(ctx context.Context, req UpdatePageRequest) error {
 		data["properties"] = req.Properties
 	}
 
-	result, err := c.CallTool(ctx, "notion-update-page", data)
+	args := map[string]any{"data": data}
+
+	result, err := c.CallTool(ctx, "notion-update-page", args)
 	if err != nil {
 		return err
 	}
