@@ -87,6 +87,11 @@ notion-cli page sync ./document.md --parent-db <db-id>      # Sync as database e
 notion-cli page edit <url> --replace "New content"                      # Replace all content
 notion-cli page edit <url> --find "old text" --replace-with "new text"  # Find and replace
 notion-cli page edit <url> --find "section" --append "extra content"    # Append after match
+
+# Read full property values (REST-backed, paginated)
+notion-cli page property get <page-id> --name "People"
+notion-cli page property get <page-id> --property-id "abc123"
+notion-cli page property get <page-id> --name "People" --json
 ```
 
 ### Search
