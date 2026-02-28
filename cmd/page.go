@@ -209,6 +209,7 @@ type PageUploadCmd struct {
 	File         string   `arg:"" help:"Markdown file to upload" type:"existingfile"`
 	Title        string   `help:"Page title (default: filename or first heading)" short:"t"`
 	Parent       string   `help:"Parent page URL, name, or ID" short:"p"`
+	ParentDB     string   `help:"Parent database URL, name, or ID" name:"parent-db" short:"d"`
 	Icon         string   `help:"Page icon (emoji, https URL, or 'none' to clear)" short:"i"`
 	JSON         bool     `help:"Output as JSON" short:"j"`
 	AssetBaseURL string   `help:"Base URL used to rewrite local image embeds (or NOTION_CLI_ASSET_BASE_URL)"`
@@ -220,10 +221,10 @@ type PageUploadCmd struct {
 
 func (c *PageUploadCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runPageUpload(ctx, c.File, c.Title, c.Parent, c.Icon, c.AssetBaseURL, c.AssetRoot, c.PropertyMode, c.Props, c.Prop)
+	return runPageUpload(ctx, c.File, c.Title, c.Parent, c.ParentDB, c.Icon, c.AssetBaseURL, c.AssetRoot, c.PropertyMode, c.Props, c.Prop)
 }
 
-func runPageUpload(ctx *Context, file, title, parent, icon, assetBaseURL, assetRoot, propertyModeRaw string, propsFlags, propFlags []string) error {
+func runPageUpload(ctx *Context, file, title, parent, parentDB, icon, assetBaseURL, assetRoot, propertyModeRaw string, propsFlags, propFlags []string) error {
 	explicitIcon, parsedIcon, err := parseExplicitIcon(icon)
 	if err != nil {
 		output.PrintError(err)
@@ -281,21 +282,31 @@ func runPageUpload(ctx *Context, file, title, parent, icon, assetBaseURL, assetR
 
 	bgCtx := context.Background()
 
-	parentID := parent
-	if parent != "" {
-		resolved, err := cli.ResolvePageID(bgCtx, client, parent)
+	req := mcp.CreatePageRequest{
+		Title:      title,
+		Content:    markdown,
+		Properties: flagProperties,
+	}
+
+	if parentDB != "" {
+		dbID, err := cli.ResolveDatabaseID(bgCtx, client, parentDB)
 		if err != nil {
 			output.PrintError(err)
 			return err
 		}
-		parentID = resolved
-	}
-
-	req := mcp.CreatePageRequest{
-		Title:        title,
-		ParentPageID: parentID,
-		Content:      markdown,
-		Properties:   flagProperties,
+		dbID, err = client.ResolveDataSourceID(bgCtx, dbID)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		req.ParentDatabaseID = dbID
+	} else if parent != "" {
+		parentID, err := cli.ResolvePageID(bgCtx, client, parent)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		req.ParentPageID = parentID
 	}
 
 	resp, err := client.CreatePage(bgCtx, req)
@@ -561,6 +572,7 @@ type PageSyncCmd struct {
 	File         string   `arg:"" help:"Markdown file to sync" type:"existingfile"`
 	Title        string   `help:"Page title (default: filename or first heading)" short:"t"`
 	Parent       string   `help:"Parent page URL, name, or ID" short:"p"`
+	ParentDB     string   `help:"Parent database URL, name, or ID" name:"parent-db" short:"d"`
 	Icon         string   `help:"Page icon (emoji, https URL, or 'none' to clear)" short:"i"`
 	JSON         bool     `help:"Output as JSON" short:"j"`
 	AssetBaseURL string   `help:"Base URL used to rewrite local image embeds (or NOTION_CLI_ASSET_BASE_URL)"`
@@ -572,10 +584,10 @@ type PageSyncCmd struct {
 
 func (c *PageSyncCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runPageSync(ctx, c.File, c.Title, c.Parent, c.Icon, c.AssetBaseURL, c.AssetRoot, c.PropertyMode, c.Props, c.Prop)
+	return runPageSync(ctx, c.File, c.Title, c.Parent, c.ParentDB, c.Icon, c.AssetBaseURL, c.AssetRoot, c.PropertyMode, c.Props, c.Prop)
 }
 
-func runPageSync(ctx *Context, file, title, parent, icon, assetBaseURL, assetRoot, propertyModeRaw string, propsFlags, propFlags []string) error {
+func runPageSync(ctx *Context, file, title, parent, parentDB, icon, assetBaseURL, assetRoot, propertyModeRaw string, propsFlags, propFlags []string) error {
 	explicitIcon, parsedIcon, err := parseExplicitIcon(icon)
 	if err != nil {
 		output.PrintError(err)
@@ -698,21 +710,31 @@ func runPageSync(ctx *Context, file, title, parent, icon, assetBaseURL, assetRoo
 		return nil
 	}
 
-	parentID := parent
-	if parent != "" {
-		resolved, err := cli.ResolvePageID(bgCtx, client, parent)
+	req := mcp.CreatePageRequest{
+		Title:      title,
+		Content:    body,
+		Properties: properties,
+	}
+
+	if parentDB != "" {
+		dbID, err := cli.ResolveDatabaseID(bgCtx, client, parentDB)
 		if err != nil {
 			output.PrintError(err)
 			return err
 		}
-		parentID = resolved
-	}
-
-	req := mcp.CreatePageRequest{
-		Title:        title,
-		ParentPageID: parentID,
-		Content:      body,
-		Properties:   properties,
+		dbID, err = client.ResolveDataSourceID(bgCtx, dbID)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		req.ParentDatabaseID = dbID
+	} else if parent != "" {
+		parentID, err := cli.ResolvePageID(bgCtx, client, parent)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		req.ParentPageID = parentID
 	}
 
 	resp, err := client.CreatePage(bgCtx, req)

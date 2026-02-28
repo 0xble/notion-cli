@@ -323,6 +323,23 @@ func extractURLFromText(text string) string {
 	return ""
 }
 
+// ResolveDataSourceID fetches a database by ID and extracts the data source ID
+// from the collection:// URL in the content. If the ID is already a data source ID,
+// it is returned as-is.
+func (c *Client) ResolveDataSourceID(ctx context.Context, id string) (string, error) {
+	result, err := c.Fetch(ctx, id)
+	if err != nil {
+		return id, nil
+	}
+
+	re := regexp.MustCompile(`collection://([a-fA-F0-9-]{32,36})`)
+	if m := re.FindStringSubmatch(result.Content); m != nil {
+		return m[1], nil
+	}
+
+	return id, nil
+}
+
 type UpdatePageRequest struct {
 	PageID  string
 	Command string // "replace_content", "replace_content_range", "insert_content_after", "update_properties"

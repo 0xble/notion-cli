@@ -97,11 +97,13 @@ notion-cli page upload ./document.md --icon "https://cdn.example.com/icon.png" #
 notion-cli page upload ./document.md --icon "none"           # Clear icon
 notion-cli page upload ./document.md --asset-base-url "https://cdn.example.com/docs" # Rewrite local image embeds
 notion-cli page upload ./document.md --props "Status=Todo;Priority=High"
+notion-cli page upload ./document.md --parent-db <db-id>    # Upload as database entry
 
 # Sync a markdown file (create or update)
 notion-cli page sync ./document.md                          # Creates page, writes notion-id to frontmatter
 notion-cli page sync ./document.md                          # Updates page using notion-id from frontmatter
 notion-cli page sync ./document.md --parent "Engineering"   # Set parent on first sync
+notion-cli page sync ./document.md --parent-db <db-id>      # Sync as database entry
 notion-cli page sync ./document.md --asset-base-url "https://cdn.example.com/docs"
 notion-cli page sync ./document.md --props "Status=Todo;Priority=High"
 notion-cli page sync ./document.md --prop "Priority=Urgent" # --prop overrides values set via --props/frontmatter
@@ -133,6 +135,10 @@ notion-cli db list --json                      # Output as JSON
 
 notion-cli db query <database-id>              # Query database
 notion-cli db query <id> --json                # Output as JSON
+
+notion-cli db create <database> --title "New entry"
+notion-cli db create <database> --title "Entry" -P "Status=Todo"
+notion-cli db create <database> --title "Entry" -f ./body.md
 ```
 
 ### Comments

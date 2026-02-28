@@ -44,7 +44,7 @@ For CI/headless environments, set `NOTION_ACCESS_TOKEN`. You can also choose pro
 ```
 notion-cli auth            # Manage authentication
 notion-cli page            # Manage pages (list, view, create, upload, sync, edit, archive, delete)
-notion-cli db              # Manage databases (list, query)
+notion-cli db              # Manage databases (list, query, create entries)
 notion-cli search          # Search the workspace
 notion-cli comment         # Manage comments (list, create)
 notion-cli tools           # List available MCP tools
@@ -87,6 +87,7 @@ notion-cli page create --title "Child" --parent <page-id>       # Parent by ID
 notion-cli page upload ./document.md
 notion-cli page upload ./doc.md --title "Custom Title"
 notion-cli page upload ./doc.md --parent "Parent Page Name"
+notion-cli page upload ./doc.md --parent-db <db-id>         # Upload as database entry
 notion-cli page upload ./doc.md --asset-base-url "https://cdn.example.com/docs"
 
 # Sync a markdown file (create or update)
@@ -94,6 +95,7 @@ notion-cli page upload ./doc.md --asset-base-url "https://cdn.example.com/docs"
 # Subsequent runs update the page content using the stored notion-id.
 notion-cli page sync ./document.md
 notion-cli page sync ./document.md --parent "Engineering"   # Set parent on first sync
+notion-cli page sync ./document.md --parent-db <db-id>      # Sync as database entry
 notion-cli page sync ./document.md --title "Custom Title"
 notion-cli page sync ./document.md --asset-base-url "https://cdn.example.com/docs"
 
@@ -111,6 +113,10 @@ notion-cli db list --json
 
 notion-cli db query <database-url-or-id>    # Query a database
 notion-cli db query <id> --json
+
+notion-cli db create <database> --title "New entry"
+notion-cli db create <database> --title "Entry" -P "Status=Todo"
+notion-cli db create <database> --title "Entry" -f ./body.md
 ```
 
 ### Comments
