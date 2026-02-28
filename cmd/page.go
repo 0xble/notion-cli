@@ -13,12 +13,13 @@ import (
 )
 
 type PageCmd struct {
-	List   PageListCmd   `cmd:"" help:"List pages"`
-	View   PageViewCmd   `cmd:"" help:"View a page"`
-	Create PageCreateCmd `cmd:"" help:"Create a page"`
-	Upload PageUploadCmd `cmd:"" help:"Upload a markdown file as a page"`
-	Sync   PageSyncCmd   `cmd:"" help:"Sync a markdown file to a page (create or update)"`
-	Edit   PageEditCmd   `cmd:"" help:"Edit a page"`
+	List    PageListCmd    `cmd:"" help:"List pages"`
+	View    PageViewCmd    `cmd:"" help:"View a page"`
+	Create  PageCreateCmd  `cmd:"" help:"Create a page"`
+	Upload  PageUploadCmd  `cmd:"" help:"Upload a markdown file as a page"`
+	Sync    PageSyncCmd    `cmd:"" help:"Sync a markdown file to a page (create or update)"`
+	Edit    PageEditCmd    `cmd:"" help:"Edit a page"`
+	Archive PageArchiveCmd `cmd:"" help:"Archive a page"`
 }
 
 type PageListCmd struct {
@@ -367,6 +368,62 @@ func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText stri
 
 	output.PrintSuccess("Page updated")
 	return nil
+}
+
+type PageArchiveCmd struct {
+	Page string `arg:"" help:"Page URL, name, or ID"`
+}
+
+func (c *PageArchiveCmd) Run(ctx *Context) error {
+	return runPageArchive(ctx, c.Page)
+}
+
+func runPageArchive(ctx *Context, page string) error {
+	bgCtx := context.Background()
+
+	ref := cli.ParsePageRef(page)
+	pageID := ref.ID
+	switch ref.Kind {
+	case cli.RefName:
+		client, err := cli.RequireClient()
+		if err != nil {
+			return err
+		}
+		defer func() { _ = client.Close() }()
+
+		resolved, err := cli.ResolvePageID(bgCtx, client, page)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		pageID = resolved
+	case cli.RefID:
+		pageID = ref.ID
+	case cli.RefURL:
+		if extractedID, ok := cli.ExtractNotionUUID(page); ok {
+			pageID = extractedID
+			break
+		}
+		return &output.UserError{Message: fmt.Sprintf("could not extract page ID from URL: %s\nUse the page ID directly instead.", page)}
+	}
+
+	if err := archivePageViaOfficialAPI(bgCtx, pageID); err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	output.PrintSuccess("Page archived")
+	return nil
+}
+
+func archivePageViaOfficialAPI(ctx context.Context, pageID string) error {
+	client, err := cli.RequireOfficialAPIClient()
+	if err != nil {
+		return err
+	}
+	return client.PatchPage(ctx, pageID, map[string]any{
+		"archived": true,
+	})
 }
 
 type PageSyncCmd struct {
