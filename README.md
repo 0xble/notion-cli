@@ -113,6 +113,30 @@ notion-cli db list --json                      # Output as JSON
 
 notion-cli db query <database-id>              # Query database
 notion-cli db query <id> --json                # Output as JSON
+
+# List views on a database (private API mode)
+notion-cli db view list <database-id>
+notion-cli db view list <database-id> --json
+
+# Create a view (all layouts supported)
+notion-cli db view create <database-id> --name "Planning" --layout table
+notion-cli db view create <database-id> --name "Gallery A" --layout gallery
+notion-cli db view create <database-id> --name "Timeline A" --layout timeline
+notion-cli db view create <database-id> --name "Calendar A" --layout calendar
+notion-cli db view create <database-id> --name "Board A" --layout board
+notion-cli db view create <database-id> --name "List A" --layout list
+notion-cli db view create <database-id> --name "Chart A" --layout chart
+notion-cli db view create <database-id> --name "Feed A" --layout feed
+notion-cli db view create <database-id> --name "Map A" --layout map
+
+# View option flags
+notion-cli db view create <database-id> --name "Gallery B" --layout gallery \
+  --show-page-icon --wrap-content --open-pages-in center-peek \
+  --card-preview none --card-size medium --card-layout list
+
+# Update a view by URL/ID/name
+notion-cli db view update <database-id> <view-id> --name "My Updated View"
+notion-cli db view update <database-id> <view-id> --layout gallery --card-layout compact
 ```
 
 ### Comments
@@ -138,6 +162,25 @@ Configuration is stored at `~/.config/notion-cli/config.json`.
 The CLI uses Notion's remote MCP server with OAuth authentication. On first run, `notion-cli auth login` will open your browser to authorize the CLI with your Notion workspace.
 
 **Note:** Access tokens expire after 1 hour. The CLI automatically refreshes tokens when they expire or are about to expire, so you typically don't need to think about this. Use `notion-cli auth refresh` to manually refresh if needed.
+
+Private web API mode (used by `db view` create/update/list) is configured in the same file:
+
+```json
+{
+  "private_api": {
+    "enabled": true,
+    "token_v2": "...",
+    "notion_user_id": "...",
+    "notion_users": "...",
+    "device_id": "...",
+    "csrf": "...",
+    "active_user_id": "...",
+    "space_id": "...",
+    "base_url": "https://www.notion.so",
+    "user_agent": "..."
+  }
+}
+```
 
 ## Environment Variables
 
