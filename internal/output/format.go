@@ -99,6 +99,48 @@ func PrintDatabases(dbs []Database, asJSON bool) error {
 	return nil
 }
 
+func PrintViews(views []View, asJSON bool) error {
+	if asJSON {
+		return printJSON(views)
+	}
+
+	if len(views) == 0 {
+		fmt.Println("No views found.")
+		return nil
+	}
+
+	table := NewTable("ID", "NAME", "LAYOUT", "URL")
+	for _, v := range views {
+		table.AddRow(
+			TruncateID(v.ID),
+			Truncate(v.Name, 40),
+			v.Layout,
+			v.URL,
+		)
+	}
+	table.Render()
+	return nil
+}
+
+func PrintView(view View, asJSON bool) error {
+	if asJSON {
+		return printJSON(view)
+	}
+
+	labelStyle := color.New(color.Faint)
+	titleStyle := color.New(color.Bold, color.FgWhite)
+	_, _ = titleStyle.Println(view.Name)
+	fmt.Println()
+
+	_, _ = labelStyle.Print("ID:      ")
+	fmt.Println(view.ID)
+	_, _ = labelStyle.Print("Layout:  ")
+	fmt.Println(view.Layout)
+	_, _ = labelStyle.Print("URL:     ")
+	fmt.Println(view.URL)
+	return nil
+}
+
 func PrintSearchResults(results []SearchResult, asJSON bool) error {
 	if asJSON {
 		return printJSON(results)

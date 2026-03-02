@@ -1,9 +1,12 @@
 package cmd
 
+import "github.com/lox/notion-cli/internal/config"
+
 type Context struct {
 	JSON    bool
 	Token   string
 	Account string
+	Config  config.Config
 }
 
 type CLI struct {

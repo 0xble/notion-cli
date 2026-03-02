@@ -200,9 +200,10 @@ func (c *Client) Search(ctx context.Context, query string, opts *SearchOptions) 
 }
 
 type FetchResult struct {
-	Content string
-	Title   string
-	URL     string
+	Content    string
+	Title      string
+	URL        string
+	ObjectType string
 }
 
 type fetchResponse struct {
@@ -229,7 +230,12 @@ func (c *Client) Fetch(ctx context.Context, id string) (*FetchResult, error) {
 
 	var resp fetchResponse
 	if err := json.Unmarshal([]byte(text), &resp); err == nil && resp.Text != "" {
-		return &FetchResult{Content: resp.Text, Title: resp.Title, URL: resp.URL}, nil
+		return &FetchResult{
+			Content:    resp.Text,
+			Title:      resp.Title,
+			URL:        resp.URL,
+			ObjectType: resp.Metadata.Type,
+		}, nil
 	}
 
 	return &FetchResult{Content: text}, nil
