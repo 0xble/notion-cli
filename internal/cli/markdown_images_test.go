@@ -133,3 +133,54 @@ func TestRewriteLocalMarkdownImages_NoBaseURL(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, md)
 	}
 }
+
+func TestFindLocalMarkdownImages(t *testing.T) {
+	tmp := t.TempDir()
+	docDir := filepath.Join(tmp, "docs")
+	if err := os.MkdirAll(filepath.Join(docDir, "assets"), 0o755); err != nil {
+		t.Fatalf("mkdir assets: %v", err)
+	}
+
+	img1 := filepath.Join(docDir, "assets", "diagram.png")
+	if err := os.WriteFile(img1, []byte("png"), 0o644); err != nil {
+		t.Fatalf("write image1: %v", err)
+	}
+	img2 := filepath.Join(docDir, "assets", "chart.jpg")
+	if err := os.WriteFile(img2, []byte("jpg"), 0o644); err != nil {
+		t.Fatalf("write image2: %v", err)
+	}
+
+	docFile := filepath.Join(docDir, "guide.md")
+	md := "![Diagram](./assets/diagram.png)\n![Remote](https://example.com/r.png)\n![Chart](./assets/chart.jpg)\n"
+
+	got, err := FindLocalMarkdownImages(md, docFile)
+	if err != nil {
+		t.Fatalf("FindLocalMarkdownImages() error: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len(got)=%d, want 2", len(got))
+	}
+	if got[0].Resolved != img1 {
+		t.Fatalf("first resolved = %q, want %q", got[0].Resolved, img1)
+	}
+	if got[0].Alt != "Diagram" {
+		t.Fatalf("first alt = %q, want %q", got[0].Alt, "Diagram")
+	}
+	if got[1].Resolved != img2 {
+		t.Fatalf("second resolved = %q, want %q", got[1].Resolved, img2)
+	}
+}
+
+func TestFindLocalMarkdownImages_MissingFile(t *testing.T) {
+	tmp := t.TempDir()
+	docFile := filepath.Join(tmp, "doc.md")
+	md := "![Missing](./missing.png)\n"
+
+	_, err := FindLocalMarkdownImages(md, docFile)
+	if err == nil {
+		t.Fatal("expected error for missing local file")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

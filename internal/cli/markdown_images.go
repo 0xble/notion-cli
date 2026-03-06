@@ -21,6 +21,12 @@ type MarkdownImageRewrite struct {
 	URL      string
 }
 
+type LocalMarkdownImage struct {
+	Alt      string
+	Original string
+	Resolved string
+}
+
 var markdownImageRE = regexp.MustCompile(`!\[([^\]]*)\]\(([^)\n]+)\)`)
 var uriSchemeRE = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*:`)
 
@@ -114,6 +120,55 @@ func RewriteLocalMarkdownImages(markdown string, opts MarkdownImageRewriteOption
 
 	out.WriteString(markdown[last:])
 	return out.String(), rewrites, nil
+}
+
+// FindLocalMarkdownImages returns all local markdown image links in order.
+func FindLocalMarkdownImages(markdown, sourceFile string) ([]LocalMarkdownImage, error) {
+	sourceFileAbs, err := filepath.Abs(sourceFile)
+	if err != nil {
+		return nil, fmt.Errorf("resolve source file path: %w", err)
+	}
+	sourceDir := filepath.Dir(sourceFileAbs)
+
+	matches := markdownImageRE.FindAllStringSubmatchIndex(markdown, -1)
+	if len(matches) == 0 {
+		return nil, nil
+	}
+
+	local := make([]LocalMarkdownImage, 0, len(matches))
+	for _, m := range matches {
+		altStart, altEnd := m[2], m[3]
+		destStart, destEnd := m[4], m[5]
+
+		alt := markdown[altStart:altEnd]
+		rawDest := markdown[destStart:destEnd]
+
+		dest, ok := parseMarkdownDestination(rawDest)
+		if !ok || !isLocalDestination(dest) {
+			continue
+		}
+
+		resolvedPath, err := resolveLocalPath(dest, sourceDir)
+		if err != nil {
+			return nil, err
+		}
+
+		info, err := os.Stat(resolvedPath)
+		if err != nil {
+			return nil, fmt.Errorf("local image %q not found (from %s): %w", dest, sourceFile, err)
+		}
+		if info.IsDir() {
+			return nil, fmt.Errorf("local image %q resolves to a directory: %s", dest, resolvedPath)
+		}
+
+		local = append(local, LocalMarkdownImage{
+			Alt:      alt,
+			Original: dest,
+			Resolved: resolvedPath,
+		})
+	}
+
+	return local, nil
 }
 
 func parseMarkdownDestination(raw string) (string, bool) {
