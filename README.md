@@ -223,7 +223,7 @@ Private web API mode (used by `db view` create/update/list) is configured in the
 ## Environment Variables
 
 | Variable | Description |
-|----------|-------------|
+| ---------- | ----------- |
 | `NOTION_ACCESS_TOKEN` | Access token for CI/headless usage (skips OAuth) |
 | `NOTION_ACCOUNT` | Account profile to use (`default` fallback when unset) |
 | `NOTION_CLI_ASSET_BASE_URL` | Base URL for rewriting local markdown image embeds during `page upload`/`page sync` |

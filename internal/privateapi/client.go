@@ -373,15 +373,13 @@ func (c *Client) DeleteDatabaseView(ctx context.Context, req ViewDeleteRequest) 
 
 		if viewID == req.ViewID {
 			found = true
-			format := map[string]any{}
 			if rv.Value != nil {
-				format = toMap(rv.Value["format"])
 				deleted = View{
 					ID:     req.ViewID,
 					Name:   stringValue(rv.Value["name"]),
 					Layout: stringValue(rv.Value["type"]),
 					URL:    c.viewURL(req.DatabaseID, req.ViewID),
-					Format: format,
+					Format: toMap(rv.Value["format"]),
 				}
 			} else {
 				deleted = View{
