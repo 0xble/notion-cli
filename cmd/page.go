@@ -95,20 +95,25 @@ func runPageView(ctx *Context, page string, raw bool) error {
 	bgCtx := context.Background()
 
 	ref := cli.ParsePageRef(page)
-	fetchID := page
-	if ref.Kind == cli.RefName {
-		resolved, err := cli.ResolvePageID(bgCtx, client, page)
-		if err != nil {
-			output.PrintError(err)
-			return err
-		}
-		fetchID = resolved
+	fetchID, err := resolveFetchID(bgCtx, page, ref, client, cli.ResolvePageID)
+	if err != nil {
+		output.PrintError(err)
+		return err
 	}
 
 	result, err := client.Fetch(bgCtx, fetchID)
 	if err != nil {
 		output.PrintError(err)
 		return err
+	}
+
+	if ctx.JSON {
+		return output.PrintPage(output.Page{
+			ID:      fetchID,
+			Title:   result.Title,
+			URL:     result.URL,
+			Content: result.Content,
+		}, true)
 	}
 
 	if result.Content == "" {
@@ -122,6 +127,22 @@ func runPageView(ctx *Context, page string, raw bool) error {
 	}
 
 	return output.RenderPage(result.Content)
+}
+
+type pageIDResolver func(context.Context, *mcp.Client, string) (string, error)
+
+func resolveFetchID(ctx context.Context, page string, ref cli.PageRef, client *mcp.Client, resolve pageIDResolver) (string, error) {
+	switch ref.Kind {
+	case cli.RefID:
+		return ref.ID, nil
+	case cli.RefName:
+		if resolve == nil {
+			return "", fmt.Errorf("resolver not configured for page name input")
+		}
+		return resolve(ctx, client, page)
+	default:
+		return page, nil
+	}
 }
 
 type PageCreateCmd struct {
@@ -308,10 +329,10 @@ func extractEmojiFromTitle(title string) (icon, cleanTitle string) {
 
 type PageEditCmd struct {
 	Page        string `arg:"" help:"Page URL, name, or ID"`
-	Replace     string `help:"Replace entire content with this text" xor:"action"`
-	Find        string `help:"Text to find (use ... for ellipsis)" xor:"action"`
+	Replace     string `help:"Replace entire content with this text"`
+	Find        string `help:"Text to find (use ... for ellipsis)"`
 	ReplaceWith string `help:"Text to replace with (requires --find)" name:"replace-with"`
-	Append      string `help:"Append text after selection (requires --find)" xor:"action"`
+	Append      string `help:"Append text after selection (requires --find)"`
 }
 
 func (c *PageEditCmd) Run(ctx *Context) error {
@@ -341,24 +362,12 @@ func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText stri
 		pageID = ref.ID
 	}
 
-	var req mcp.UpdatePageRequest
-	req.PageID = pageID
-
-	switch {
-	case replace != "":
-		req.Command = "replace_content"
-		req.NewContent = replace
-	case find != "" && replaceWith != "":
-		req.Command = "replace_content_range"
-		req.Selection = find
-		req.NewStr = replaceWith
-	case find != "" && appendText != "":
-		req.Command = "insert_content_after"
-		req.Selection = find
-		req.NewStr = appendText
-	default:
-		return &output.UserError{Message: "specify --replace, or --find with --replace-with or --append"}
+	req, err := buildPageEditRequest(replace, find, replaceWith, appendText)
+	if err != nil {
+		output.PrintError(err)
+		return err
 	}
+	req.PageID = pageID
 
 	if err := client.UpdatePage(bgCtx, req); err != nil {
 		output.PrintError(err)
@@ -367,6 +376,50 @@ func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText stri
 
 	output.PrintSuccess("Page updated")
 	return nil
+}
+
+func buildPageEditRequest(replace, find, replaceWith, appendText string) (mcp.UpdatePageRequest, error) {
+	if replace == "" && find == "" && replaceWith == "" && appendText == "" {
+		return mcp.UpdatePageRequest{}, &output.UserError{Message: "specify --replace, or --find with --replace-with or --append"}
+	}
+
+	if replace != "" {
+		if find != "" || replaceWith != "" || appendText != "" {
+			return mcp.UpdatePageRequest{}, &output.UserError{Message: "--replace cannot be combined with --find, --replace-with, or --append"}
+		}
+		return mcp.UpdatePageRequest{
+			Command:    "replace_content",
+			NewContent: replace,
+		}, nil
+	}
+
+	if find == "" {
+		if replaceWith != "" || appendText != "" {
+			return mcp.UpdatePageRequest{}, &output.UserError{Message: "--replace-with and --append require --find"}
+		}
+		return mcp.UpdatePageRequest{}, &output.UserError{Message: "specify --replace, or --find with --replace-with or --append"}
+	}
+
+	hasReplace := replaceWith != ""
+	hasAppend := appendText != ""
+	if hasReplace == hasAppend {
+		return mcp.UpdatePageRequest{}, &output.UserError{Message: "with --find, specify exactly one of --replace-with or --append"}
+	}
+
+	if hasAppend {
+		return mcp.UpdatePageRequest{
+			Command:   "insert_content_after",
+			Selection: find,
+			NewStr:    appendText,
+		}, nil
+	}
+
+	return mcp.UpdatePageRequest{
+		Command: "update_content",
+		ContentUpdates: []mcp.ContentUpdate{
+			{OldStr: find, NewStr: replaceWith},
+		},
+	}, nil
 }
 
 type PageSyncCmd struct {

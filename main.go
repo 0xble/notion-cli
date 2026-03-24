@@ -11,9 +11,14 @@ import (
 var version = "dev"
 
 func main() {
+	if shouldPrintVersionAndExit(os.Args[1:]) {
+		println("notion-cli version " + version)
+		os.Exit(0)
+	}
+
 	c := &cmd.CLI{}
 	ctx := kong.Parse(c,
-		kong.Name("notion"),
+		kong.Name("notion-cli"),
 		kong.Description("A CLI for Notion"),
 		kong.UsageOnError(),
 		kong.Vars{"version": version},
@@ -22,4 +27,12 @@ func main() {
 	err := ctx.Run(&cmd.Context{Token: c.Token})
 	ctx.FatalIfErrorf(err)
 	os.Exit(0)
+}
+
+func shouldPrintVersionAndExit(args []string) bool {
+	if len(args) != 1 {
+		return false
+	}
+
+	return args[0] == "--version" || args[0] == "-v"
 }
