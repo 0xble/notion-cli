@@ -22,6 +22,10 @@ type PageCmd struct {
 	Edit   PageEditCmd   `cmd:"" help:"Edit a page"`
 }
 
+var loadPageViewCommentsFn = loadPageViewComments
+var printViewedPageFn = output.PrintViewedPage
+var printWarningFn = output.PrintWarning
+
 type PageListCmd struct {
 	Query string `help:"Filter pages by name" short:"q"`
 	Limit int    `help:"Maximum number of results" short:"l" default:"20"`
@@ -76,17 +80,18 @@ func filterPages(results []mcp.SearchResult, limit int) []output.Page {
 }
 
 type PageViewCmd struct {
-	Page string `arg:"" help:"Page URL, name, or ID"`
-	JSON bool   `help:"Output as JSON" short:"j"`
-	Raw  bool   `help:"Output raw Notion response without formatting" short:"r"`
+	Page     string `arg:"" help:"Page URL, name, or ID"`
+	Comments bool   `help:"Show open page and block comments" default:"true" negatable:""`
+	JSON     bool   `help:"Output as JSON" short:"j"`
+	Raw      bool   `help:"Output raw Notion response without formatting" short:"r"`
 }
 
 func (c *PageViewCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runPageView(ctx, c.Page, c.Raw)
+	return runPageView(ctx, c.Page, c.Raw, c.Comments)
 }
 
-func runPageView(ctx *Context, page string, raw bool) error {
+func runPageView(ctx *Context, page string, raw, includeComments bool) error {
 	client, err := cli.RequireClient()
 	if err != nil {
 		return err
@@ -102,24 +107,38 @@ func runPageView(ctx *Context, page string, raw bool) error {
 		return err
 	}
 
-	result, err := client.Fetch(bgCtx, fetchID)
+	fetchPage := client.Fetch
+	if shouldLoadPageViewComments(raw, includeComments, ctx.JSON) {
+		fetchPage = client.FetchWithDiscussions
+	}
+
+	result, err := fetchPage(bgCtx, fetchID)
 	if err != nil {
 		output.PrintError(err)
 		return err
 	}
 
-	if ctx.JSON {
-		return output.PrintPage(output.Page{
-			ID:      fetchID,
-			Title:   result.Title,
-			URL:     result.URL,
-			Content: result.Content,
-		}, true)
+	return renderFetchedPageView(bgCtx, ctx, client, fetchID, result, raw, includeComments)
+}
+
+func renderFetchedPageView(bgCtx context.Context, ctx *Context, client *mcp.Client, fetchID string, result *mcp.FetchResult, raw, includeComments bool) error {
+	comments, err := loadPageViewCommentsFn(bgCtx, client, fetchID, result.Content, raw, includeComments, ctx.JSON)
+	if err != nil {
+		if !ctx.JSON {
+			printWarningFn("Unable to load comments: " + err.Error())
+		}
+		comments = nil
 	}
 
-	if result.Content == "" {
-		output.PrintWarning("No content found")
-		return nil
+	pageOutput := output.Page{
+		ID:      fetchID,
+		Title:   result.Title,
+		URL:     result.URL,
+		Content: result.Content,
+	}
+
+	if ctx.JSON {
+		return printViewedPageFn(pageOutput, comments, true)
 	}
 
 	if raw {
@@ -127,7 +146,35 @@ func runPageView(ctx *Context, page string, raw bool) error {
 		return nil
 	}
 
-	return output.RenderPage(result.Content)
+	if result.Content == "" {
+		printWarningFn("No content found")
+		if len(comments) == 0 {
+			return nil
+		}
+		fmt.Println()
+	}
+
+	return printViewedPageFn(pageOutput, comments, false)
+}
+
+func loadPageViewComments(ctx context.Context, client *mcp.Client, pageID, pageContent string, raw, includeComments, asJSON bool) ([]output.Comment, error) {
+	if !shouldLoadPageViewComments(raw, includeComments, asJSON) {
+		return nil, nil
+	}
+
+	mcpComments, err := loadAllComments(ctx, client, buildCommentListRequest(pageID, false))
+	if err != nil {
+		return nil, err
+	}
+
+	comments := convertComments(mcpComments)
+	hydrateCommentContextsFromPageContent(pageContent, comments)
+	hydrateCommentAuthors(ctx, client, comments)
+	return comments, nil
+}
+
+func shouldLoadPageViewComments(raw, includeComments, asJSON bool) bool {
+	return includeComments && (!raw || asJSON)
 }
 
 type pageIDResolver func(context.Context, *mcp.Client, string) (string, error)
