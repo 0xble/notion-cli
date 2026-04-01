@@ -255,20 +255,21 @@ func runPageCreate(ctx *Context, title, parent, content string) error {
 }
 
 type PageUploadCmd struct {
-	File     string `arg:"" help:"Markdown file to upload" type:"existingfile"`
-	Title    string `help:"Page title (default: filename or first heading)" short:"t"`
-	Parent   string `help:"Parent page URL, name, or ID" short:"p"`
-	ParentDB string `help:"Parent database URL, name, or ID" name:"parent-db" short:"d"`
-	Icon     string `help:"Emoji icon for the page" short:"i"`
-	JSON     bool   `help:"Output as JSON" short:"j"`
+	File            string `arg:"" help:"Markdown file to upload" type:"existingfile"`
+	Title           string `help:"Page title (default: filename or first heading)" short:"t"`
+	Parent          string `help:"Parent page URL, name, or ID" short:"p"`
+	ParentDB        string `help:"Parent database URL, name, or ID" name:"parent-db" short:"d"`
+	Icon            string `help:"Emoji icon for the page" short:"i"`
+	SkipLocalImages bool   `help:"Strip local image references instead of uploading them" name:"skip-local-images"`
+	JSON            bool   `help:"Output as JSON" short:"j"`
 }
 
 func (c *PageUploadCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runPageUpload(ctx, c.File, c.Title, c.Parent, c.ParentDB, c.Icon)
+	return runPageUpload(ctx, c.File, c.Title, c.Parent, c.ParentDB, c.Icon, c.SkipLocalImages)
 }
 
-func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) error {
+func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string, skipLocalImages bool) error {
 	content, err := os.ReadFile(file)
 	if err != nil {
 		output.PrintError(err)
@@ -277,14 +278,23 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) err
 
 	markdown := string(content)
 	bgCtx := context.Background()
-	markdown, localUploads, err := prepareLocalImageUploads(bgCtx, file, markdown)
-	if err != nil {
-		output.PrintError(err)
-		return err
-	}
-	if err := requireLocalImageParent(localUploads, parent, parentDB); err != nil {
-		output.PrintError(err)
-		return err
+	var localUploads []uploadedLocalImage
+	if skipLocalImages {
+		markdown, err = stripLocalImages(file, markdown)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+	} else {
+		markdown, localUploads, err = prepareLocalImageUploads(bgCtx, file, markdown)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		if err := requireLocalImageParent(localUploads, parent, parentDB); err != nil {
+			output.PrintError(err)
+			return err
+		}
 	}
 
 	if title == "" {
@@ -540,20 +550,21 @@ func parsePageEditProperties(props []string) (map[string]any, error) {
 }
 
 type PageSyncCmd struct {
-	File     string `arg:"" help:"Markdown file to sync" type:"existingfile"`
-	Title    string `help:"Page title (default: filename or first heading)" short:"t"`
-	Parent   string `help:"Parent page URL, name, or ID" short:"p"`
-	ParentDB string `help:"Parent database URL, name, or ID" name:"parent-db" short:"d"`
-	Icon     string `help:"Emoji icon for the page" short:"i"`
-	JSON     bool   `help:"Output as JSON" short:"j"`
+	File            string `arg:"" help:"Markdown file to sync" type:"existingfile"`
+	Title           string `help:"Page title (default: filename or first heading)" short:"t"`
+	Parent          string `help:"Parent page URL, name, or ID" short:"p"`
+	ParentDB        string `help:"Parent database URL, name, or ID" name:"parent-db" short:"d"`
+	Icon            string `help:"Emoji icon for the page" short:"i"`
+	SkipLocalImages bool   `help:"Strip local image references instead of uploading them" name:"skip-local-images"`
+	JSON            bool   `help:"Output as JSON" short:"j"`
 }
 
 func (c *PageSyncCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runPageSync(ctx, c.File, c.Title, c.Parent, c.ParentDB, c.Icon)
+	return runPageSync(ctx, c.File, c.Title, c.Parent, c.ParentDB, c.Icon, c.SkipLocalImages)
 }
 
-func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error {
+func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipLocalImages bool) error {
 	raw, err := os.ReadFile(file)
 	if err != nil {
 		output.PrintError(err)
@@ -563,10 +574,19 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 	content := string(raw)
 	fm, body := cli.ParseFrontmatter(content)
 	bgCtx := context.Background()
-	body, localUploads, err := prepareLocalImageUploads(bgCtx, file, body)
-	if err != nil {
-		output.PrintError(err)
-		return err
+	var localUploads []uploadedLocalImage
+	if skipLocalImages {
+		body, err = stripLocalImages(file, body)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+	} else {
+		body, localUploads, err = prepareLocalImageUploads(bgCtx, file, body)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
 	}
 
 	if title == "" {
@@ -637,9 +657,11 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 		return nil
 	}
 
-	if err := requireLocalImageParent(localUploads, parent, parentDB); err != nil {
-		output.PrintError(err)
-		return err
+	if !skipLocalImages {
+		if err := requireLocalImageParent(localUploads, parent, parentDB); err != nil {
+			output.PrintError(err)
+			return err
+		}
 	}
 
 	req := mcp.CreatePageRequest{
