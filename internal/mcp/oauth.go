@@ -168,7 +168,7 @@ func RunOAuthFlow(ctx context.Context, tokenStore *FileTokenStore) error {
 	fmt.Println()
 	fmt.Println("Waiting for authentication...")
 
-	if err := openBrowser(authURL); err != nil {
+	if err := OpenBrowser(authURL); err != nil {
 		fmt.Printf("(Could not open browser automatically: %v)\n", err)
 	}
 
@@ -256,7 +256,7 @@ func RefreshToken(ctx context.Context, tokenStore *FileTokenStore) (*transport.T
 	return newToken, nil
 }
 
-func openBrowser(url string) error {
+func OpenBrowser(url string) error {
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
