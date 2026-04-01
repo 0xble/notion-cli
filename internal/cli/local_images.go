@@ -29,7 +29,8 @@ func RewriteStandaloneLocalImages(markdown, sourceFile string) (string, []LocalI
 	}
 	sourceDir := filepath.Dir(sourceFileAbs)
 
-	lines := strings.Split(markdown, "\n")
+	normalizedMarkdown := strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(markdown)
+	lines := strings.Split(normalizedMarkdown, "\n")
 	placements := make([]LocalImagePlacement, 0)
 	for i, line := range lines {
 		matches := markdownImageRE.FindAllStringSubmatch(line, -1)

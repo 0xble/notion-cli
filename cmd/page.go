@@ -330,18 +330,20 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) err
 		output.PrintError(err)
 		return err
 	}
-	pageID := pageIDFromCreateResponse(resp)
-	if err := substituteUploadedLocalImages(bgCtx, pageID, localUploads); err != nil {
-		finalErr := fmt.Errorf("insert uploaded local images: %w", err)
-		if pageID != "" {
-			if apiClient, apiErr := cli.RequireOfficialAPIClient(); apiErr == nil {
-				if cleanupErr := apiClient.TrashPage(bgCtx, pageID); cleanupErr != nil {
-					finalErr = fmt.Errorf("%w (cleanup failed: %v)", finalErr, cleanupErr)
+		pageID := pageIDFromCreateResponse(resp)
+		if err := substituteUploadedLocalImages(bgCtx, pageID, localUploads); err != nil {
+			finalErr := fmt.Errorf("insert uploaded local images: %w", err)
+			if pageID != "" {
+				if apiClient, apiErr := cli.RequireOfficialAPIClient(); apiErr == nil {
+					if cleanupErr := apiClient.TrashPage(bgCtx, pageID); cleanupErr != nil {
+						finalErr = fmt.Errorf("%w (cleanup failed: %v)", finalErr, cleanupErr)
+					}
+				} else {
+					finalErr = fmt.Errorf("%w (cleanup client init failed: %v)", finalErr, apiErr)
 				}
 			}
-		}
-		output.PrintError(finalErr)
-		return finalErr
+			output.PrintError(finalErr)
+			return finalErr
 	}
 
 	displayTitle := title
@@ -669,18 +671,20 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 		return err
 	}
 
-	pageID := pageIDFromCreateResponse(resp)
-	if err := substituteUploadedLocalImages(bgCtx, pageID, localUploads); err != nil {
-		finalErr := fmt.Errorf("insert uploaded local images: %w", err)
-		if pageID != "" {
-			if apiClient, apiErr := cli.RequireOfficialAPIClient(); apiErr == nil {
-				if cleanupErr := apiClient.TrashPage(bgCtx, pageID); cleanupErr != nil {
-					finalErr = fmt.Errorf("%w (cleanup failed: %v)", finalErr, cleanupErr)
+		pageID := pageIDFromCreateResponse(resp)
+		if err := substituteUploadedLocalImages(bgCtx, pageID, localUploads); err != nil {
+			finalErr := fmt.Errorf("insert uploaded local images: %w", err)
+			if pageID != "" {
+				if apiClient, apiErr := cli.RequireOfficialAPIClient(); apiErr == nil {
+					if cleanupErr := apiClient.TrashPage(bgCtx, pageID); cleanupErr != nil {
+						finalErr = fmt.Errorf("%w (cleanup failed: %v)", finalErr, cleanupErr)
+					}
+				} else {
+					finalErr = fmt.Errorf("%w (cleanup client init failed: %v)", finalErr, apiErr)
 				}
 			}
-		}
-		output.PrintError(finalErr)
-		return finalErr
+			output.PrintError(finalErr)
+			return finalErr
 	}
 	if pageID == "" {
 		output.PrintWarning("Page created but could not retrieve ID for frontmatter")

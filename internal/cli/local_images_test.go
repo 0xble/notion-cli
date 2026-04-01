@@ -30,6 +30,26 @@ func TestRewriteStandaloneLocalImagesRewritesStandaloneLocalLines(t *testing.T) 
 	}
 }
 
+func TestRewriteStandaloneLocalImagesHandlesCRLF(t *testing.T) {
+	tmp := t.TempDir()
+	doc := filepath.Join(tmp, "doc.md")
+	img := filepath.Join(tmp, "diagram.png")
+	if err := os.WriteFile(img, []byte("PNG"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	rewritten, placements, err := RewriteStandaloneLocalImages("# Title\r\n\r\n![Diagram](./diagram.png)\r\n", doc)
+	if err != nil {
+		t.Fatalf("RewriteStandaloneLocalImages: %v", err)
+	}
+	if len(placements) != 1 {
+		t.Fatalf("len(placements) = %d, want 1", len(placements))
+	}
+	if !strings.Contains(rewritten, placements[0].Placeholder) {
+		t.Fatalf("rewritten markdown missing placeholder: %q", rewritten)
+	}
+}
+
 func TestRewriteStandaloneLocalImagesRejectsInlineLocalImage(t *testing.T) {
 	tmp := t.TempDir()
 	doc := filepath.Join(tmp, "doc.md")
