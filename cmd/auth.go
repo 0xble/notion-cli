@@ -28,6 +28,9 @@ type AuthCmd struct {
 var authAPIInput io.Reader = os.Stdin
 var authAPIOutput io.Writer = os.Stdout
 var authAPIError io.Writer = os.Stderr
+var openOfficialAPIBrowser = mcp.OpenBrowser
+
+const officialAPIIntegrationsURL = "https://www.notion.so/profile/integrations/internal"
 
 type AuthLoginCmd struct{}
 
@@ -187,7 +190,7 @@ func (c *AuthAPISetupCmd) Run(ctx *Context) error {
 	}
 
 	output.PrintSuccess("Official API token saved")
-	fmt.Fprintf(authAPIOutput, "Config path: %s\n", mustConfigPath())
+	_, _ = fmt.Fprintf(authAPIOutput, "Config path: %s\n", mustConfigPath())
 	return nil
 }
 
@@ -244,15 +247,15 @@ func (c *AuthAPIVerifyCmd) Run(ctx *Context) error {
 	}
 
 	output.PrintSuccess("Official API token verified")
-	fmt.Fprintf(authAPIOutput, "Token source:   %s\n", loaded.APITokenSource)
-	fmt.Fprintf(authAPIOutput, "Config path:    %s\n", loaded.ConfigPath)
-	fmt.Fprintf(authAPIOutput, "Base URL:       %s\n", loaded.Config.API.BaseURL)
-	fmt.Fprintf(authAPIOutput, "Notion version: %s\n", loaded.Config.API.NotionVersion)
+	_, _ = fmt.Fprintf(authAPIOutput, "Token source:   %s\n", loaded.APITokenSource)
+	_, _ = fmt.Fprintf(authAPIOutput, "Config path:    %s\n", loaded.ConfigPath)
+	_, _ = fmt.Fprintf(authAPIOutput, "Base URL:       %s\n", loaded.Config.API.BaseURL)
+	_, _ = fmt.Fprintf(authAPIOutput, "Notion version: %s\n", loaded.Config.API.NotionVersion)
 	if self.Name != "" {
-		fmt.Fprintf(authAPIOutput, "Actor:          %s\n", self.Name)
+		_, _ = fmt.Fprintf(authAPIOutput, "Actor:          %s\n", self.Name)
 	}
 	if self.Bot != nil && self.Bot.WorkspaceName != "" {
-		fmt.Fprintf(authAPIOutput, "Workspace:      %s\n", self.Bot.WorkspaceName)
+		_, _ = fmt.Fprintf(authAPIOutput, "Workspace:      %s\n", self.Bot.WorkspaceName)
 	}
 	return nil
 }
@@ -288,35 +291,56 @@ func printAuthAPIStatus(ctx *Context, loaded *cli.OfficialAPIConfig) error {
 	} else {
 		output.PrintWarning("Official API token not configured")
 	}
-	fmt.Fprintln(authAPIOutput)
-	fmt.Fprintf(authAPIOutput, "Token source:   %s\n", loaded.APITokenSource)
-	fmt.Fprintf(authAPIOutput, "Config path:    %s\n", loaded.ConfigPath)
-	fmt.Fprintf(authAPIOutput, "Base URL:       %s\n", loaded.Config.API.BaseURL)
-	fmt.Fprintf(authAPIOutput, "Notion version: %s\n", loaded.Config.API.NotionVersion)
+	_, _ = fmt.Fprintln(authAPIOutput)
+	_, _ = fmt.Fprintf(authAPIOutput, "Token source:   %s\n", loaded.APITokenSource)
+	_, _ = fmt.Fprintf(authAPIOutput, "Config path:    %s\n", loaded.ConfigPath)
+	_, _ = fmt.Fprintf(authAPIOutput, "Base URL:       %s\n", loaded.Config.API.BaseURL)
+	_, _ = fmt.Fprintf(authAPIOutput, "Notion version: %s\n", loaded.Config.API.NotionVersion)
 	if !hasToken {
-		fmt.Fprintln(authAPIOutput, "Run 'notion-cli auth api setup' or set NOTION_API_TOKEN.")
+		_, _ = fmt.Fprintln(authAPIOutput, "Run 'notion-cli auth api setup' or set NOTION_API_TOKEN.")
 	}
 	return nil
 }
 
 func readOfficialAPIToken(in io.Reader, out, errOut io.Writer) (string, error) {
 	if f, ok := in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
-		fmt.Fprint(errOut, "Official API token: ")
+		printOfficialAPITokenSetupHint(errOut, true)
+		_, _ = fmt.Fprint(errOut, "Official API token: ")
 		secret, err := term.ReadPassword(int(f.Fd()))
-		fmt.Fprintln(errOut)
+		_, _ = fmt.Fprintln(errOut)
 		if err != nil {
 			return "", err
 		}
-		return strings.TrimSpace(string(secret)), nil
+		token := strings.TrimSpace(string(secret))
+		if token != "" {
+			_, _ = fmt.Fprintln(errOut, "Token received (hidden).")
+		}
+		return token, nil
 	}
 
-	fmt.Fprint(out, "Official API token: ")
+	_, _ = fmt.Fprint(out, "Official API token: ")
 	reader := bufio.NewReader(in)
 	line, err := reader.ReadString('\n')
 	if err != nil && err != io.EOF {
 		return "", err
 	}
 	return strings.TrimSpace(line), nil
+}
+
+func printOfficialAPITokenSetupHint(out io.Writer, shouldOpenBrowser bool) {
+	fmt.Fprintln(out, "Get your token from Notion internal integrations:")
+	fmt.Fprintf(out, "  %s\n", officialAPIIntegrationsURL)
+	if shouldOpenBrowser {
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "Opening that page in your browser...")
+		if err := openOfficialAPIBrowser(officialAPIIntegrationsURL); err != nil {
+			fmt.Fprintf(out, "(Could not open browser automatically: %v)\n", err)
+		}
+	}
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Create or select an integration, copy the token from Configuration, then paste it below.")
+	fmt.Fprintln(out, "Paste is hidden. Press Enter when done.")
+	fmt.Fprintln(out)
 }
 
 func mustConfigPath() string {

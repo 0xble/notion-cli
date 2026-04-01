@@ -58,7 +58,7 @@ notion-cli auth status     # Show authentication status
 notion-cli auth logout     # Clear stored credentials
 
 # Official API fallback auth for features MCP cannot handle directly
-notion-cli auth api setup
+notion-cli auth api setup     # Opens the internal integrations page, then prompts for token
 notion-cli auth api status
 notion-cli auth api verify
 notion-cli auth api unset

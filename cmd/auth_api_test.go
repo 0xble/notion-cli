@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,6 +16,64 @@ func TestReadOfficialAPITokenFromReader(t *testing.T) {
 	}
 	if token != "secret-token" {
 		t.Fatalf("token = %q, want secret-token", token)
+	}
+}
+
+func TestPrintOfficialAPITokenSetupHintIncludesURL(t *testing.T) {
+	var out bytes.Buffer
+
+	printOfficialAPITokenSetupHint(&out, false)
+
+	text := out.String()
+	if !strings.Contains(text, officialAPIIntegrationsURL) {
+		t.Fatalf("hint should include integrations URL: %q", text)
+	}
+	if !strings.Contains(text, "copy the token from Configuration") {
+		t.Fatalf("hint should explain where to find the token: %q", text)
+	}
+	if !strings.Contains(text, "Paste is hidden. Press Enter when done.") {
+		t.Fatalf("hint should explain hidden paste behavior: %q", text)
+	}
+}
+
+func TestPrintOfficialAPITokenSetupHintOpensBrowserWhenRequested(t *testing.T) {
+	var out bytes.Buffer
+	var openedURL string
+
+	oldOpenBrowser := openOfficialAPIBrowser
+	openOfficialAPIBrowser = func(url string) error {
+		openedURL = url
+		return nil
+	}
+	t.Cleanup(func() {
+		openOfficialAPIBrowser = oldOpenBrowser
+	})
+
+	printOfficialAPITokenSetupHint(&out, true)
+
+	if openedURL != officialAPIIntegrationsURL {
+		t.Fatalf("opened URL = %q, want %q", openedURL, officialAPIIntegrationsURL)
+	}
+	if !strings.Contains(out.String(), "Opening that page in your browser") {
+		t.Fatalf("expected browser open message in output: %q", out.String())
+	}
+}
+
+func TestPrintOfficialAPITokenSetupHintReportsBrowserOpenFailure(t *testing.T) {
+	var out bytes.Buffer
+
+	oldOpenBrowser := openOfficialAPIBrowser
+	openOfficialAPIBrowser = func(string) error {
+		return errors.New("boom")
+	}
+	t.Cleanup(func() {
+		openOfficialAPIBrowser = oldOpenBrowser
+	})
+
+	printOfficialAPITokenSetupHint(&out, true)
+
+	if !strings.Contains(out.String(), "Could not open browser automatically: boom") {
+		t.Fatalf("expected browser open failure in output: %q", out.String())
 	}
 }
 
