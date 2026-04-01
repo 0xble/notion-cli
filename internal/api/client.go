@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"path/filepath"
 	"strings"
 	"time"
@@ -183,12 +185,17 @@ func (c *Client) AppendUploadedImageAfter(ctx context.Context, parentID, afterBl
 	}
 
 	payload := map[string]any{
-		"after": afterBlockID,
 		"children": []map[string]any{
 			{
 				"object": "block",
 				"type":   "image",
 				"image":  image,
+			},
+		},
+		"position": map[string]any{
+			"type": "after_block",
+			"after_block": map[string]any{
+				"id": afterBlockID,
 			},
 		},
 	}
@@ -304,7 +311,11 @@ func (c *Client) sendFileUploadPart(ctx context.Context, fileUploadID, filename 
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 
-	part, err := writer.CreateFormFile("file", filename)
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename="%s"`, filename))
+	header.Set("Content-Type", detectUploadContentType(filename, data))
+
+	part, err := writer.CreatePart(header)
 	if err != nil {
 		return nil, fmt.Errorf("create multipart file part: %w", err)
 	}
@@ -324,6 +335,18 @@ func (c *Client) sendFileUploadPart(ctx context.Context, fileUploadID, filename 
 		out.ID = strings.TrimSpace(fileUploadID)
 	}
 	return &out, nil
+}
+
+func detectUploadContentType(filename string, data []byte) string {
+	if ext := strings.TrimSpace(filepath.Ext(filename)); ext != "" {
+		if contentType := strings.TrimSpace(mime.TypeByExtension(strings.ToLower(ext))); contentType != "" {
+			return contentType
+		}
+	}
+	if len(data) > 0 {
+		return http.DetectContentType(data)
+	}
+	return "application/octet-stream"
 }
 
 func (c *Client) waitForFileUploadUploaded(ctx context.Context, fileUploadID string) (*FileUpload, error) {

@@ -282,6 +282,10 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) err
 		output.PrintError(err)
 		return err
 	}
+	if err := requireLocalImageParent(localUploads, parent, parentDB); err != nil {
+		output.PrintError(err)
+		return err
+	}
 
 	if title == "" {
 		title = extractTitleFromMarkdown(markdown)
@@ -631,6 +635,11 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 
 		output.PrintSuccess("Synced: " + displayTitle)
 		return nil
+	}
+
+	if err := requireLocalImageParent(localUploads, parent, parentDB); err != nil {
+		output.PrintError(err)
+		return err
 	}
 
 	req := mcp.CreatePageRequest{

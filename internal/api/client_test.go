@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -58,6 +60,21 @@ func TestUploadFileAndAppendAfter(t *testing.T) {
 			if !strings.HasPrefix(ct, "multipart/form-data;") {
 				t.Fatalf("Content-Type = %q", ct)
 			}
+			mediaType, params, err := mime.ParseMediaType(ct)
+			if err != nil {
+				t.Fatalf("ParseMediaType: %v", err)
+			}
+			if mediaType != "multipart/form-data" {
+				t.Fatalf("mediaType = %q", mediaType)
+			}
+			reader := multipart.NewReader(r.Body, params["boundary"])
+			part, err := reader.NextPart()
+			if err != nil {
+				t.Fatalf("NextPart: %v", err)
+			}
+			if got := part.Header.Get("Content-Type"); got != "image/png" {
+				t.Fatalf("part Content-Type = %q", got)
+			}
 			_, _ = w.Write([]byte(`{"id":"upload_123","status":"uploaded"}`))
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/file_uploads/upload_123":
 			getCalls++
@@ -69,8 +86,19 @@ func TestUploadFileAndAppendAfter(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 				t.Fatalf("Decode: %v", err)
 			}
-			if payload["after"] != "block_123" {
-				t.Fatalf("after = %#v", payload["after"])
+			position, ok := payload["position"].(map[string]any)
+			if !ok {
+				t.Fatalf("position = %#v", payload["position"])
+			}
+			if position["type"] != "after_block" {
+				t.Fatalf("position.type = %#v", position["type"])
+			}
+			afterBlock, ok := position["after_block"].(map[string]any)
+			if !ok {
+				t.Fatalf("position.after_block = %#v", position["after_block"])
+			}
+			if afterBlock["id"] != "block_123" {
+				t.Fatalf("position.after_block.id = %#v", afterBlock["id"])
 			}
 			_, _ = w.Write([]byte(`{"results":[]}`))
 		default:
