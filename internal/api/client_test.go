@@ -72,6 +72,9 @@ func TestUploadFileAndAppendAfter(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NextPart: %v", err)
 			}
+			if got := part.FileName(); got != `diag"ram.png` {
+				t.Fatalf("part FileName = %q", got)
+			}
 			if got := part.Header.Get("Content-Type"); got != "image/png" {
 				t.Fatalf("part Content-Type = %q", got)
 			}
@@ -112,7 +115,7 @@ func TestUploadFileAndAppendAfter(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 
-	uploadID, err := client.UploadFile(context.Background(), "diagram.png", []byte("PNGDATA"))
+	uploadID, err := client.UploadFile(context.Background(), `diag"ram.png`, []byte("PNGDATA"))
 	if err != nil {
 		t.Fatalf("UploadFile: %v", err)
 	}

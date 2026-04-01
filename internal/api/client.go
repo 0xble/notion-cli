@@ -312,7 +312,14 @@ func (c *Client) sendFileUploadPart(ctx context.Context, fileUploadID, filename 
 	writer := multipart.NewWriter(&body)
 
 	header := make(textproto.MIMEHeader)
-	header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename="%s"`, filename))
+	contentDisposition := mime.FormatMediaType("form-data", map[string]string{
+		"name":     "file",
+		"filename": filename,
+	})
+	if strings.TrimSpace(contentDisposition) == "" {
+		return nil, fmt.Errorf("format multipart content disposition: empty result")
+	}
+	header.Set("Content-Disposition", contentDisposition)
 	header.Set("Content-Type", detectUploadContentType(filename, data))
 
 	part, err := writer.CreatePart(header)
