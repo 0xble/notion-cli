@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/lox/notion-cli/internal/api"
 	"github.com/lox/notion-cli/internal/cli"
 	"github.com/lox/notion-cli/internal/mcp"
 	"github.com/lox/notion-cli/internal/output"
@@ -270,6 +271,12 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) err
 	}
 
 	markdown := string(content)
+	bgCtx := context.Background()
+	markdown, localUploads, err := prepareLocalImageUploads(bgCtx, file, markdown)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
 
 	if title == "" {
 		title = extractTitleFromMarkdown(markdown)
@@ -287,8 +294,6 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) err
 		return err
 	}
 	defer func() { _ = client.Close() }()
-
-	bgCtx := context.Background()
 
 	req := mcp.CreatePageRequest{
 		Title:   title,
@@ -321,6 +326,19 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) err
 		output.PrintError(err)
 		return err
 	}
+	pageID := pageIDFromCreateResponse(resp)
+	if err := substituteUploadedLocalImages(bgCtx, pageID, localUploads); err != nil {
+		finalErr := fmt.Errorf("insert uploaded local images: %w", err)
+		if pageID != "" {
+			if apiClient, apiErr := cli.RequireOfficialAPIClient(); apiErr == nil {
+				if cleanupErr := apiClient.TrashPage(bgCtx, pageID); cleanupErr != nil {
+					finalErr = fmt.Errorf("%w (cleanup failed: %v)", finalErr, cleanupErr)
+				}
+			}
+		}
+		output.PrintError(finalErr)
+		return finalErr
+	}
 
 	displayTitle := title
 	if icon != "" {
@@ -329,7 +347,7 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) err
 
 	if ctx.JSON {
 		outPage := output.Page{
-			ID:    resp.ID,
+			ID:    pageID,
 			URL:   resp.URL,
 			Title: displayTitle,
 			Icon:  icon,
@@ -535,6 +553,12 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 
 	content := string(raw)
 	fm, body := cli.ParseFrontmatter(content)
+	bgCtx := context.Background()
+	body, localUploads, err := prepareLocalImageUploads(bgCtx, file, body)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
 
 	if title == "" {
 		title = extractTitleFromMarkdown(body)
@@ -552,9 +576,21 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 	}
 	defer func() { _ = client.Close() }()
 
-	bgCtx := context.Background()
-
 	if fm.NotionID != "" {
+		var snapshot *api.PageMarkdown
+		if len(localUploads) > 0 {
+			apiClient, err := cli.RequireOfficialAPIClient()
+			if err != nil {
+				output.PrintError(err)
+				return err
+			}
+			snapshot, err = apiClient.GetPageMarkdown(bgCtx, fm.NotionID)
+			if err != nil {
+				output.PrintError(err)
+				return err
+			}
+		}
+
 		req := mcp.UpdatePageRequest{
 			PageID:     fm.NotionID,
 			Command:    "replace_content",
@@ -563,6 +599,15 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 		if err := client.UpdatePage(bgCtx, req); err != nil {
 			output.PrintError(err)
 			return err
+		}
+		if err := substituteUploadedLocalImages(bgCtx, fm.NotionID, localUploads); err != nil {
+			finalErr := fmt.Errorf("insert uploaded local images: %w", err)
+			rollbackErr := rollbackSyncedPage(bgCtx, client, fm.NotionID, snapshot)
+			if rollbackErr != nil {
+				finalErr = fmt.Errorf("%w (rollback failed: %v)", finalErr, rollbackErr)
+			}
+			output.PrintError(finalErr)
+			return finalErr
 		}
 
 		displayTitle := title
@@ -615,9 +660,18 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 		return err
 	}
 
-	pageID := resp.ID
-	if pageID == "" && resp.URL != "" {
-		pageID, _ = cli.ExtractNotionUUID(resp.URL)
+	pageID := pageIDFromCreateResponse(resp)
+	if err := substituteUploadedLocalImages(bgCtx, pageID, localUploads); err != nil {
+		finalErr := fmt.Errorf("insert uploaded local images: %w", err)
+		if pageID != "" {
+			if apiClient, apiErr := cli.RequireOfficialAPIClient(); apiErr == nil {
+				if cleanupErr := apiClient.TrashPage(bgCtx, pageID); cleanupErr != nil {
+					finalErr = fmt.Errorf("%w (cleanup failed: %v)", finalErr, cleanupErr)
+				}
+			}
+		}
+		output.PrintError(finalErr)
+		return finalErr
 	}
 	if pageID == "" {
 		output.PrintWarning("Page created but could not retrieve ID for frontmatter")
