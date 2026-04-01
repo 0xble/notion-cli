@@ -268,7 +268,7 @@ func (c *AuthAPIUnsetCmd) Run(ctx *Context) error {
 		return err
 	}
 	output.PrintSuccess("Official API token removed")
-	fmt.Fprintf(authAPIOutput, "Config path: %s\n", mustConfigPath())
+	_, _ = fmt.Fprintf(authAPIOutput, "Config path: %s\n", mustConfigPath())
 	return nil
 }
 
@@ -328,19 +328,19 @@ func readOfficialAPIToken(in io.Reader, out, errOut io.Writer) (string, error) {
 }
 
 func printOfficialAPITokenSetupHint(out io.Writer, shouldOpenBrowser bool) {
-	fmt.Fprintln(out, "Get your token from Notion internal integrations:")
-	fmt.Fprintf(out, "  %s\n", officialAPIIntegrationsURL)
+	_, _ = fmt.Fprintln(out, "Get your token from Notion internal integrations:")
+	_, _ = fmt.Fprintf(out, "  %s\n", officialAPIIntegrationsURL)
 	if shouldOpenBrowser {
-		fmt.Fprintln(out)
-		fmt.Fprintln(out, "Opening that page in your browser...")
+		_, _ = fmt.Fprintln(out)
+		_, _ = fmt.Fprintln(out, "Opening that page in your browser...")
 		if err := openOfficialAPIBrowser(officialAPIIntegrationsURL); err != nil {
-			fmt.Fprintf(out, "(Could not open browser automatically: %v)\n", err)
+			_, _ = fmt.Fprintf(out, "(Could not open browser automatically: %v)\n", err)
 		}
 	}
-	fmt.Fprintln(out)
-	fmt.Fprintln(out, "Create or select an integration, copy the token from Configuration, then paste it below.")
-	fmt.Fprintln(out, "Paste is hidden. Press Enter when done.")
-	fmt.Fprintln(out)
+	_, _ = fmt.Fprintln(out)
+	_, _ = fmt.Fprintln(out, "Create or select an integration, copy the token from Configuration, then paste it below.")
+	_, _ = fmt.Fprintln(out, "Paste is hidden. Press Enter when done.")
+	_, _ = fmt.Fprintln(out)
 }
 
 func mustConfigPath() string {
