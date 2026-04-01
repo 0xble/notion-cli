@@ -9,6 +9,7 @@ import (
 	"github.com/lox/notion-cli/internal/api"
 	"github.com/lox/notion-cli/internal/cli"
 	"github.com/lox/notion-cli/internal/mcp"
+	"github.com/lox/notion-cli/internal/output"
 )
 
 type uploadedLocalImage struct {
@@ -57,6 +58,18 @@ func prepareLocalImageUploads(ctx context.Context, sourceFile, markdown string) 
 	}
 
 	return rewritten, uploads, nil
+}
+
+func requireLocalImageParent(uploads []uploadedLocalImage, parent, parentDB string) error {
+	if len(uploads) == 0 {
+		return nil
+	}
+	if strings.TrimSpace(parent) != "" || strings.TrimSpace(parentDB) != "" {
+		return nil
+	}
+	return &output.UserError{
+		Message: "standalone local image upload requires --parent or --parent-db shared with your Notion integration",
+	}
 }
 
 func substituteUploadedLocalImages(ctx context.Context, pageID string, uploads []uploadedLocalImage) error {

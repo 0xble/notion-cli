@@ -77,8 +77,19 @@ func TestSubstituteUploadedLocalImagesAppendsAfterPlaceholderAndDeletes(t *testi
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 				t.Fatalf("Decode: %v", err)
 			}
-			if payload["after"] != "block_123" {
-				t.Fatalf("after = %#v", payload["after"])
+			position, ok := payload["position"].(map[string]any)
+			if !ok {
+				t.Fatalf("position = %#v", payload["position"])
+			}
+			if position["type"] != "after_block" {
+				t.Fatalf("position.type = %#v", position["type"])
+			}
+			afterBlock, ok := position["after_block"].(map[string]any)
+			if !ok {
+				t.Fatalf("position.after_block = %#v", position["after_block"])
+			}
+			if afterBlock["id"] != "block_123" {
+				t.Fatalf("position.after_block.id = %#v", afterBlock["id"])
 			}
 			_, _ = w.Write([]byte(`{"results":[]}`))
 		case r.Method == http.MethodDelete && r.URL.Path == "/v1/blocks/block_123":
@@ -105,5 +116,29 @@ func TestSubstituteUploadedLocalImagesAppendsAfterPlaceholderAndDeletes(t *testi
 	}
 	if !sawAppend || !sawDelete {
 		t.Fatalf("expected append and delete, saw append=%v delete=%v", sawAppend, sawDelete)
+	}
+}
+
+func TestRequireLocalImageParent(t *testing.T) {
+	uploads := []uploadedLocalImage{{
+		Placeholder: "PLACEHOLDER",
+	}}
+
+	if err := requireLocalImageParent(nil, "", ""); err != nil {
+		t.Fatalf("expected nil without uploads, got %v", err)
+	}
+	if err := requireLocalImageParent(uploads, "parent-id", ""); err != nil {
+		t.Fatalf("expected nil with parent, got %v", err)
+	}
+	if err := requireLocalImageParent(uploads, "", "db-id"); err != nil {
+		t.Fatalf("expected nil with parent db, got %v", err)
+	}
+
+	err := requireLocalImageParent(uploads, "", "")
+	if err == nil {
+		t.Fatal("expected error without parent or parent db")
+	}
+	if !strings.Contains(err.Error(), "--parent or --parent-db") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
