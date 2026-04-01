@@ -60,6 +60,29 @@ func prepareLocalImageUploads(ctx context.Context, sourceFile, markdown string) 
 	return rewritten, uploads, nil
 }
 
+func stripLocalImages(sourceFile, markdown string) (string, error) {
+	rewritten, placements, err := cli.RewriteStandaloneLocalImages(markdown, sourceFile)
+	if err != nil {
+		return "", err
+	}
+	if len(placements) == 0 {
+		return markdown, nil
+	}
+
+	lines := strings.Split(rewritten, "\n")
+	placeholders := make(map[string]struct{}, len(placements))
+	for _, placement := range placements {
+		placeholders[placement.Placeholder] = struct{}{}
+	}
+	for i, line := range lines {
+		if _, ok := placeholders[line]; ok {
+			lines[i] = ""
+		}
+	}
+
+	return strings.Join(lines, "\n"), nil
+}
+
 func requireLocalImageParent(uploads []uploadedLocalImage, parent, parentDB string) error {
 	if len(uploads) == 0 {
 		return nil
