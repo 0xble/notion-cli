@@ -24,7 +24,12 @@ func main() {
 		kong.Vars{"version": version},
 	)
 	cli.SetAccessToken(c.Token)
-	err := ctx.Run(&cmd.Context{Token: c.Token})
+	err := ctx.Run(&cmd.Context{
+		Token:            c.Token,
+		APIToken:         c.APIToken,
+		APIBaseURL:       c.APIBaseURL,
+		APINotionVersion: c.APINotionVersion,
+	})
 	ctx.FatalIfErrorf(err)
 	os.Exit(0)
 }

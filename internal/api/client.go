@@ -17,6 +17,11 @@ import (
 
 const defaultHTTPTimeout = 20 * time.Second
 
+var (
+	fileUploadPollInterval = 250 * time.Millisecond
+	fileUploadMaxChecks    = 240
+)
+
 type Client struct {
 	httpClient    *http.Client
 	baseURL       string
@@ -337,8 +342,7 @@ func (c *Client) waitForFileUploadUploaded(ctx context.Context, fileUploadID str
 		return nil, fmt.Errorf("file upload ID is required")
 	}
 
-	const maxChecks = 20
-	for i := 0; i < maxChecks; i++ {
+	for i := 0; i < fileUploadMaxChecks; i++ {
 		var upload FileUpload
 		if err := c.doJSON(ctx, http.MethodGet, "/file_uploads/"+id, nil, &upload); err != nil {
 			return nil, err
@@ -348,16 +352,16 @@ func (c *Client) waitForFileUploadUploaded(ctx context.Context, fileUploadID str
 		}
 		status := strings.ToLower(strings.TrimSpace(upload.Status))
 		switch status {
-		case "", "uploaded":
+		case "uploaded":
 			return &upload, nil
-		case "pending":
-			if i == maxChecks-1 {
+		case "", "pending":
+			if i == fileUploadMaxChecks-1 {
 				return nil, fmt.Errorf("file upload %s did not reach uploaded status in time", id)
 			}
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
-			case <-time.After(250 * time.Millisecond):
+			case <-time.After(fileUploadPollInterval):
 			}
 		default:
 			return nil, fmt.Errorf("file upload %s failed with status %q", id, upload.Status)

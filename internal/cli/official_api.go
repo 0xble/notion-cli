@@ -14,8 +14,8 @@ type OfficialAPIConfig struct {
 	HasConfigToken bool
 }
 
-func LoadOfficialAPIConfig() (*OfficialAPIConfig, error) {
-	loaded, err := config.LoadWithMeta()
+func LoadOfficialAPIConfig(overrides config.APIOverrides) (*OfficialAPIConfig, error) {
+	loaded, err := config.LoadWithMeta(overrides)
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
@@ -27,8 +27,8 @@ func LoadOfficialAPIConfig() (*OfficialAPIConfig, error) {
 	}, nil
 }
 
-func RequireOfficialAPIClient() (*api.Client, error) {
-	loaded, err := LoadOfficialAPIConfig()
+func RequireOfficialAPIClient(overrides config.APIOverrides) (*api.Client, error) {
+	loaded, err := LoadOfficialAPIConfig(overrides)
 	if err != nil {
 		return nil, err
 	}

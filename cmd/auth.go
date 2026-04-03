@@ -198,10 +198,21 @@ type AuthAPIStatusCmd struct {
 	JSON bool `help:"Output as JSON" short:"j"`
 }
 
+func officialAPIOverrides(ctx *Context) config.APIOverrides {
+	if ctx == nil {
+		return config.APIOverrides{}
+	}
+	return config.APIOverrides{
+		BaseURL:       ctx.APIBaseURL,
+		NotionVersion: ctx.APINotionVersion,
+		Token:         ctx.APIToken,
+	}
+}
+
 func (c *AuthAPIStatusCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
 
-	loaded, err := cli.LoadOfficialAPIConfig()
+	loaded, err := cli.LoadOfficialAPIConfig(officialAPIOverrides(ctx))
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -216,12 +227,12 @@ type AuthAPIVerifyCmd struct {
 func (c *AuthAPIVerifyCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
 
-	loaded, err := cli.LoadOfficialAPIConfig()
+	loaded, err := cli.LoadOfficialAPIConfig(officialAPIOverrides(ctx))
 	if err != nil {
 		output.PrintError(err)
 		return err
 	}
-	client, err := cli.RequireOfficialAPIClient()
+	client, err := cli.RequireOfficialAPIClient(officialAPIOverrides(ctx))
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -263,7 +274,7 @@ func (c *AuthAPIVerifyCmd) Run(ctx *Context) error {
 type AuthAPIUnsetCmd struct{}
 
 func (c *AuthAPIUnsetCmd) Run(ctx *Context) error {
-	loaded, err := cli.LoadOfficialAPIConfig()
+	loaded, err := cli.LoadOfficialAPIConfig(officialAPIOverrides(ctx))
 	if err != nil {
 		output.PrintError(err)
 		return err

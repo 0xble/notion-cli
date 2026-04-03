@@ -161,7 +161,8 @@ notion-cli --help                              # Show help
 
 ## Configuration
 
-Configuration is stored at `~/.config/notion-cli/config.json`.
+Configuration is stored in your OS config directory, for example
+`~/Library/Application Support/notion-cli/config.json` on macOS.
 
 The CLI uses Notion's remote MCP server with OAuth authentication. On first run, `notion-cli auth login` will open your browser to authorize the CLI with your Notion workspace.
 

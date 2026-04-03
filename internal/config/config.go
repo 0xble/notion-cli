@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	configDirName       = ".config/notion-cli"
+	configDirName       = "notion-cli"
 	configFileName      = "config.json"
 	defaultAPIBaseURL   = "https://api.notion.com/v1"
 	defaultNotionAPIVer = "2026-03-11"
@@ -33,6 +33,12 @@ type LoadedConfig struct {
 	HasConfigToken bool
 }
 
+type APIOverrides struct {
+	BaseURL       string
+	NotionVersion string
+	Token         string
+}
+
 const (
 	APITokenSourceNone   = "none"
 	APITokenSourceConfig = "config"
@@ -49,22 +55,22 @@ func Default() Config {
 }
 
 func Path() (string, error) {
-	home, err := os.UserHomeDir()
+	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, configDirName, configFileName), nil
+	return filepath.Join(configDir, configDirName, configFileName), nil
 }
 
 func Load() (Config, error) {
-	loaded, err := LoadWithMeta()
+	loaded, err := LoadWithMeta(APIOverrides{})
 	if err != nil {
 		return Config{}, err
 	}
 	return loaded.Config, nil
 }
 
-func LoadWithMeta() (LoadedConfig, error) {
+func LoadWithMeta(overrides APIOverrides) (LoadedConfig, error) {
 	cfg := Default()
 	path, err := Path()
 	if err != nil {
@@ -81,8 +87,8 @@ func LoadWithMeta() (LoadedConfig, error) {
 		source = APITokenSourceConfig
 	}
 
-	applyEnvOverrides(&cfg)
-	if strings.TrimSpace(os.Getenv("NOTION_API_TOKEN")) != "" {
+	applyOverrides(&cfg, overrides)
+	if strings.TrimSpace(overrides.Token) != "" {
 		source = APITokenSourceEnv
 	}
 
@@ -214,18 +220,18 @@ func merge(base, overlay Config) Config {
 	return base
 }
 
-func applyEnvOverrides(cfg *Config) {
+func applyOverrides(cfg *Config, overrides APIOverrides) {
 	if cfg == nil {
 		return
 	}
 
-	if s := strings.TrimSpace(os.Getenv("NOTION_API_BASE_URL")); s != "" {
+	if s := strings.TrimSpace(overrides.BaseURL); s != "" {
 		cfg.API.BaseURL = s
 	}
-	if s := strings.TrimSpace(os.Getenv("NOTION_API_NOTION_VERSION")); s != "" {
+	if s := strings.TrimSpace(overrides.NotionVersion); s != "" {
 		cfg.API.NotionVersion = s
 	}
-	if s := strings.TrimSpace(os.Getenv("NOTION_API_TOKEN")); s != "" {
+	if s := strings.TrimSpace(overrides.Token); s != "" {
 		cfg.API.Token = s
 	}
 }

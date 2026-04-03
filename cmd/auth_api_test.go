@@ -119,7 +119,7 @@ func TestAuthAPIStatusJSONUsesLoadedConfig(t *testing.T) {
 	})
 
 	cmd := &AuthAPIStatusCmd{JSON: true}
-	if err := cmd.Run(&Context{}); err != nil {
+	if err := cmd.Run(&Context{APIToken: "env-token"}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if !strings.Contains(out.String(), `"configured": true`) {
@@ -140,9 +140,6 @@ func TestAuthAPIVerifyJSON(t *testing.T) {
 	defer srv.Close()
 
 	t.Setenv("HOME", t.TempDir())
-	t.Setenv("NOTION_API_TOKEN", "env-token")
-	t.Setenv("NOTION_API_BASE_URL", srv.URL+"/v1")
-
 	var out bytes.Buffer
 	oldOut := authAPIOutput
 	authAPIOutput = &out
@@ -151,7 +148,10 @@ func TestAuthAPIVerifyJSON(t *testing.T) {
 	})
 
 	cmd := &AuthAPIVerifyCmd{JSON: true}
-	if err := cmd.Run(&Context{}); err != nil {
+	if err := cmd.Run(&Context{
+		APIToken:   "env-token",
+		APIBaseURL: srv.URL + "/v1",
+	}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if !strings.Contains(out.String(), `"verified": true`) {
@@ -178,7 +178,7 @@ func TestAuthAPIUnsetWarnsWhenEnvTokenStillActive(t *testing.T) {
 
 	cmd := &AuthAPIUnsetCmd{}
 	stdout := captureStdout(t, func() {
-		if err := cmd.Run(&Context{}); err != nil {
+		if err := cmd.Run(&Context{APIToken: "env-token"}); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
 	})
@@ -191,7 +191,7 @@ func TestAuthAPIUnsetWarnsWhenEnvTokenStillActive(t *testing.T) {
 		t.Fatalf("expected env override note: %q", text)
 	}
 
-	loaded, err := config.LoadWithMeta()
+	loaded, err := config.LoadWithMeta(config.APIOverrides{Token: "env-token"})
 	if err != nil {
 		t.Fatalf("LoadWithMeta: %v", err)
 	}
@@ -213,7 +213,7 @@ func TestAuthAPIUnsetWarnsWhenOnlyEnvTokenExists(t *testing.T) {
 
 	cmd := &AuthAPIUnsetCmd{}
 	stdout := captureStdout(t, func() {
-		if err := cmd.Run(&Context{}); err != nil {
+		if err := cmd.Run(&Context{APIToken: "env-token"}); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
 	})

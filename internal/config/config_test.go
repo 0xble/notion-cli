@@ -9,7 +9,7 @@ import (
 func TestLoadWithMetaDefaults(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
-	loaded, err := LoadWithMeta()
+	loaded, err := LoadWithMeta(APIOverrides{})
 	if err != nil {
 		t.Fatalf("LoadWithMeta: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestLoadWithMetaReportsConfigTokenSource(t *testing.T) {
 		t.Fatalf("SetAPIToken: %v", err)
 	}
 
-	loaded, err := LoadWithMeta()
+	loaded, err := LoadWithMeta(APIOverrides{})
 	if err != nil {
 		t.Fatalf("LoadWithMeta: %v", err)
 	}
@@ -47,11 +47,11 @@ func TestLoadWithMetaEnvOverrideWins(t *testing.T) {
 	if err := SetAPIToken("config-token"); err != nil {
 		t.Fatalf("SetAPIToken: %v", err)
 	}
-	t.Setenv("NOTION_API_TOKEN", "env-token")
-	t.Setenv("NOTION_API_BASE_URL", "https://example.test/v1/")
-	t.Setenv("NOTION_API_NOTION_VERSION", "2026-04-01")
-
-	loaded, err := LoadWithMeta()
+	loaded, err := LoadWithMeta(APIOverrides{
+		Token:         "env-token",
+		BaseURL:       "https://example.test/v1/",
+		NotionVersion: "2026-04-01",
+	})
 	if err != nil {
 		t.Fatalf("LoadWithMeta: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestUnsetAPITokenClearsStoredToken(t *testing.T) {
 		t.Fatalf("UnsetAPIToken: %v", err)
 	}
 
-	loaded, err := LoadWithMeta()
+	loaded, err := LoadWithMeta(APIOverrides{})
 	if err != nil {
 		t.Fatalf("LoadWithMeta: %v", err)
 	}

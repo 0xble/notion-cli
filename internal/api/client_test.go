@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lox/notion-cli/internal/config"
 )
@@ -112,6 +113,54 @@ func TestUploadFileAndAppendAfter(t *testing.T) {
 
 	if createCalls != 1 || sendCalls != 1 || getCalls != 1 || appendCalls != 1 {
 		t.Fatalf("unexpected call counts create=%d send=%d get=%d append=%d", createCalls, sendCalls, getCalls, appendCalls)
+	}
+}
+
+func TestUploadFileRetriesEmptyAndPendingStatuses(t *testing.T) {
+	oldPollInterval := fileUploadPollInterval
+	fileUploadPollInterval = time.Millisecond
+	t.Cleanup(func() {
+		fileUploadPollInterval = oldPollInterval
+	})
+
+	getCalls := 0
+	statuses := make([]string, 0, 23)
+	statuses = append(statuses, "")
+	for i := 0; i < 21; i++ {
+		statuses = append(statuses, "pending")
+	}
+	statuses = append(statuses, "uploaded")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/file_uploads":
+			_, _ = w.Write([]byte(`{"id":"upload_123","status":"pending"}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/file_uploads/upload_123/send":
+			_, _ = w.Write([]byte(`{"id":"upload_123","status":"pending"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/file_uploads/upload_123":
+			status := statuses[getCalls]
+			getCalls++
+			_, _ = w.Write([]byte(`{"id":"upload_123","status":"` + status + `"}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(config.APIConfig{BaseURL: srv.URL + "/v1"}, "secret-token")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	uploadID, err := client.UploadFile(context.Background(), "diagram.png", []byte("PNGDATA"))
+	if err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+	if uploadID != "upload_123" {
+		t.Fatalf("UploadFile = %q, want upload_123", uploadID)
+	}
+	if getCalls != len(statuses) {
+		t.Fatalf("getCalls = %d, want %d", getCalls, len(statuses))
 	}
 }
 
