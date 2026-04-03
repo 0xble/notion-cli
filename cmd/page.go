@@ -281,7 +281,7 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string, ski
 			return err
 		}
 	} else {
-		markdown, localUploads, err = prepareLocalImageUploads(bgCtx, file, markdown)
+		markdown, localUploads, err = prepareLocalImageUploads(ctx, bgCtx, file, markdown)
 		if err != nil {
 			output.PrintError(err)
 			return err
@@ -340,20 +340,20 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string, ski
 		output.PrintError(err)
 		return err
 	}
-		pageID := pageIDFromCreateResponse(resp)
-		if err := substituteUploadedLocalImages(bgCtx, pageID, localUploads); err != nil {
-			finalErr := fmt.Errorf("insert uploaded local images: %w", err)
-			if pageID != "" {
-				if apiClient, apiErr := cli.RequireOfficialAPIClient(); apiErr == nil {
-					if cleanupErr := apiClient.TrashPage(bgCtx, pageID); cleanupErr != nil {
-						finalErr = fmt.Errorf("%w (cleanup failed: %v)", finalErr, cleanupErr)
-					}
-				} else {
-					finalErr = fmt.Errorf("%w (cleanup client init failed: %v)", finalErr, apiErr)
+	pageID := pageIDFromCreateResponse(resp)
+	if err := substituteUploadedLocalImages(ctx, bgCtx, pageID, localUploads); err != nil {
+		finalErr := fmt.Errorf("insert uploaded local images: %w", err)
+		if pageID != "" {
+			if apiClient, apiErr := cli.RequireOfficialAPIClient(officialAPIOverrides(ctx)); apiErr == nil {
+				if cleanupErr := apiClient.TrashPage(bgCtx, pageID); cleanupErr != nil {
+					finalErr = fmt.Errorf("%w (cleanup failed: %v)", finalErr, cleanupErr)
 				}
+			} else {
+				finalErr = fmt.Errorf("%w (cleanup client init failed: %v)", finalErr, apiErr)
 			}
-			output.PrintError(finalErr)
-			return finalErr
+		}
+		output.PrintError(finalErr)
+		return finalErr
 	}
 
 	displayTitle := title
@@ -579,7 +579,7 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 			return err
 		}
 	} else {
-		body, localUploads, err = prepareLocalImageUploads(bgCtx, file, body)
+		body, localUploads, err = prepareLocalImageUploads(ctx, bgCtx, file, body)
 		if err != nil {
 			output.PrintError(err)
 			return err
@@ -605,7 +605,7 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 	if fm.NotionID != "" {
 		var snapshot *api.PageMarkdown
 		if len(localUploads) > 0 {
-			apiClient, err := cli.RequireOfficialAPIClient()
+			apiClient, err := cli.RequireOfficialAPIClient(officialAPIOverrides(ctx))
 			if err != nil {
 				output.PrintError(err)
 				return err
@@ -626,7 +626,7 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 			output.PrintError(err)
 			return err
 		}
-		if err := substituteUploadedLocalImages(bgCtx, fm.NotionID, localUploads); err != nil {
+		if err := substituteUploadedLocalImages(ctx, bgCtx, fm.NotionID, localUploads); err != nil {
 			finalErr := fmt.Errorf("insert uploaded local images: %w", err)
 			rollbackErr := rollbackSyncedPage(bgCtx, client, fm.NotionID, snapshot)
 			if rollbackErr != nil {
@@ -693,20 +693,20 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 		return err
 	}
 
-		pageID := pageIDFromCreateResponse(resp)
-		if err := substituteUploadedLocalImages(bgCtx, pageID, localUploads); err != nil {
-			finalErr := fmt.Errorf("insert uploaded local images: %w", err)
-			if pageID != "" {
-				if apiClient, apiErr := cli.RequireOfficialAPIClient(); apiErr == nil {
-					if cleanupErr := apiClient.TrashPage(bgCtx, pageID); cleanupErr != nil {
-						finalErr = fmt.Errorf("%w (cleanup failed: %v)", finalErr, cleanupErr)
-					}
-				} else {
-					finalErr = fmt.Errorf("%w (cleanup client init failed: %v)", finalErr, apiErr)
+	pageID := pageIDFromCreateResponse(resp)
+	if err := substituteUploadedLocalImages(ctx, bgCtx, pageID, localUploads); err != nil {
+		finalErr := fmt.Errorf("insert uploaded local images: %w", err)
+		if pageID != "" {
+			if apiClient, apiErr := cli.RequireOfficialAPIClient(officialAPIOverrides(ctx)); apiErr == nil {
+				if cleanupErr := apiClient.TrashPage(bgCtx, pageID); cleanupErr != nil {
+					finalErr = fmt.Errorf("%w (cleanup failed: %v)", finalErr, cleanupErr)
 				}
+			} else {
+				finalErr = fmt.Errorf("%w (cleanup client init failed: %v)", finalErr, apiErr)
 			}
-			output.PrintError(finalErr)
-			return finalErr
+		}
+		output.PrintError(finalErr)
+		return finalErr
 	}
 	if pageID == "" {
 		output.PrintWarning("Page created but could not retrieve ID for frontmatter")
