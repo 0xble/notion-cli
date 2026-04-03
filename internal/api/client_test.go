@@ -69,8 +69,19 @@ func TestUploadFileAndAppendAfter(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 				t.Fatalf("Decode: %v", err)
 			}
-			if payload["after"] != "block_123" {
-				t.Fatalf("after = %#v", payload["after"])
+			position, ok := payload["position"].(map[string]any)
+			if !ok {
+				t.Fatalf("position = %#v", payload["position"])
+			}
+			if position["type"] != "after_block" {
+				t.Fatalf("position.type = %#v", position["type"])
+			}
+			afterBlock, ok := position["after_block"].(map[string]any)
+			if !ok {
+				t.Fatalf("position.after_block = %#v", position["after_block"])
+			}
+			if afterBlock["id"] != "block_123" {
+				t.Fatalf("position.after_block.id = %#v", afterBlock["id"])
 			}
 			_, _ = w.Write([]byte(`{"results":[]}`))
 		default:

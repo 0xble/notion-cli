@@ -263,12 +263,33 @@ func (c *AuthAPIVerifyCmd) Run(ctx *Context) error {
 type AuthAPIUnsetCmd struct{}
 
 func (c *AuthAPIUnsetCmd) Run(ctx *Context) error {
+	loaded, err := cli.LoadOfficialAPIConfig()
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+	if !loaded.HasConfigToken {
+		if loaded.APITokenSource == config.APITokenSourceEnv {
+			output.PrintWarning("No saved official API token to remove")
+			_, _ = fmt.Fprintln(authAPIOutput, "Effective token still comes from NOTION_API_TOKEN.")
+			return nil
+		}
+		output.PrintWarning("No saved official API token to remove")
+		_, _ = fmt.Fprintf(authAPIOutput, "Config path: %s\n", loaded.ConfigPath)
+		return nil
+	}
+
 	if err := config.UnsetAPIToken(); err != nil {
 		output.PrintError(err)
 		return err
 	}
-	output.PrintSuccess("Official API token removed")
-	_, _ = fmt.Fprintf(authAPIOutput, "Config path: %s\n", mustConfigPath())
+	if loaded.APITokenSource == config.APITokenSourceEnv {
+		output.PrintSuccess("Saved official API token removed")
+		_, _ = fmt.Fprintln(authAPIOutput, "Effective token still comes from NOTION_API_TOKEN.")
+	} else {
+		output.PrintSuccess("Official API token removed")
+	}
+	_, _ = fmt.Fprintf(authAPIOutput, "Config path: %s\n", loaded.ConfigPath)
 	return nil
 }
 

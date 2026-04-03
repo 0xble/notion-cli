@@ -183,7 +183,12 @@ func (c *Client) AppendUploadedImageAfter(ctx context.Context, parentID, afterBl
 	}
 
 	payload := map[string]any{
-		"after": afterBlockID,
+		"position": map[string]any{
+			"type": "after_block",
+			"after_block": map[string]any{
+				"id": afterBlockID,
+			},
+		},
 		"children": []map[string]any{
 			{
 				"object": "block",

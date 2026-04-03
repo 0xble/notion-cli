@@ -5,9 +5,39 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/lox/notion-cli/internal/config"
 )
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	os.Stdout = w
+	t.Cleanup(func() {
+		os.Stdout = oldStdout
+	})
+
+	done := make(chan string, 1)
+	go func() {
+		var buf bytes.Buffer
+		_, _ = buf.ReadFrom(r)
+		done <- buf.String()
+	}()
+
+	fn()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+	return <-done
+}
 
 func TestReadOfficialAPITokenFromReader(t *testing.T) {
 	token, err := readOfficialAPIToken(strings.NewReader(" secret-token \n"), &bytes.Buffer{}, &bytes.Buffer{})
@@ -129,5 +159,78 @@ func TestAuthAPIVerifyJSON(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `"workspace_name": "Workspace"`) {
 		t.Fatalf("unexpected output: %s", out.String())
+	}
+}
+
+func TestAuthAPIUnsetWarnsWhenEnvTokenStillActive(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("NOTION_API_TOKEN", "env-token")
+	if err := config.SetAPIToken("stored-token"); err != nil {
+		t.Fatalf("SetAPIToken: %v", err)
+	}
+
+	var out bytes.Buffer
+	oldOut := authAPIOutput
+	authAPIOutput = &out
+	t.Cleanup(func() {
+		authAPIOutput = oldOut
+	})
+
+	cmd := &AuthAPIUnsetCmd{}
+	stdout := captureStdout(t, func() {
+		if err := cmd.Run(&Context{}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	})
+
+	text := out.String()
+	if !strings.Contains(stdout, "Saved official API token removed") {
+		t.Fatalf("expected saved-token removal message: %q", stdout)
+	}
+	if !strings.Contains(text, "Effective token still comes from NOTION_API_TOKEN.") {
+		t.Fatalf("expected env override note: %q", text)
+	}
+
+	loaded, err := config.LoadWithMeta()
+	if err != nil {
+		t.Fatalf("LoadWithMeta: %v", err)
+	}
+	if loaded.HasConfigToken {
+		t.Fatalf("expected stored token to be removed")
+	}
+}
+
+func TestAuthAPIUnsetWarnsWhenOnlyEnvTokenExists(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("NOTION_API_TOKEN", "env-token")
+
+	var out bytes.Buffer
+	oldOut := authAPIOutput
+	authAPIOutput = &out
+	t.Cleanup(func() {
+		authAPIOutput = oldOut
+	})
+
+	cmd := &AuthAPIUnsetCmd{}
+	stdout := captureStdout(t, func() {
+		if err := cmd.Run(&Context{}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	})
+
+	text := out.String()
+	if !strings.Contains(stdout, "No saved official API token to remove") {
+		t.Fatalf("expected no-saved-token warning: %q", stdout)
+	}
+	if !strings.Contains(text, "Effective token still comes from NOTION_API_TOKEN.") {
+		t.Fatalf("expected env override note: %q", text)
+	}
+
+	cfgPath, err := config.Path()
+	if err != nil {
+		t.Fatalf("Path: %v", err)
+	}
+	if _, err := os.Stat(cfgPath); err != nil && !os.IsNotExist(err) {
+		t.Fatalf("unexpected stat error: %v", err)
 	}
 }

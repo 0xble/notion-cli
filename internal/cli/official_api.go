@@ -11,6 +11,7 @@ type OfficialAPIConfig struct {
 	Config         config.Config
 	ConfigPath     string
 	APITokenSource string
+	HasConfigToken bool
 }
 
 func LoadOfficialAPIConfig() (*OfficialAPIConfig, error) {
@@ -22,6 +23,7 @@ func LoadOfficialAPIConfig() (*OfficialAPIConfig, error) {
 		Config:         loaded.Config,
 		ConfigPath:     loaded.Path,
 		APITokenSource: loaded.APITokenSource,
+		HasConfigToken: loaded.HasConfigToken,
 	}, nil
 }
 

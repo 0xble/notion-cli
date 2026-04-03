@@ -30,6 +30,7 @@ type LoadedConfig struct {
 	Config         Config
 	Path           string
 	APITokenSource string
+	HasConfigToken bool
 }
 
 const (
@@ -90,6 +91,7 @@ func LoadWithMeta() (LoadedConfig, error) {
 		Config:         cfg,
 		Path:           path,
 		APITokenSource: source,
+		HasConfigToken: strings.TrimSpace(fileCfg.API.Token) != "",
 	}, nil
 }
 
