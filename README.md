@@ -161,9 +161,6 @@ notion-cli --help                              # Show help
 
 ## Configuration
 
-Configuration is stored in your OS config directory, for example
-`~/Library/Application Support/notion-cli/config.json` on macOS.
-
 The CLI uses Notion's remote MCP server with OAuth authentication. On first run, `notion-cli auth login` will open your browser to authorize the CLI with your Notion workspace.
 
 **Note:** Access tokens expire after 1 hour. The CLI automatically refreshes tokens when they expire or are about to expire, so you typically don't need to think about this. Use `notion-cli auth refresh` to manually refresh if needed.
