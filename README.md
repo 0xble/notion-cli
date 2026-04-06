@@ -56,6 +56,12 @@ notion-cli auth login      # Authenticate with Notion via OAuth
 notion-cli auth refresh    # Refresh the access token
 notion-cli auth status     # Show authentication status
 notion-cli auth logout     # Clear stored credentials
+
+# Official API fallback auth for features MCP cannot handle directly
+notion-cli auth api setup     # Opens the internal integrations page, then prompts for token
+notion-cli auth api status
+notion-cli auth api verify
+notion-cli auth api unset
 ```
 
 ### Pages
@@ -154,8 +160,6 @@ notion-cli --help                              # Show help
 ```
 
 ## Configuration
-
-Configuration is stored at `~/.config/notion-cli/config.json`.
 
 The CLI uses Notion's remote MCP server with OAuth authentication. On first run, `notion-cli auth login` will open your browser to authorize the CLI with your Notion workspace.
 

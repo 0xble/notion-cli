@@ -1,12 +1,18 @@
 package cmd
 
 type Context struct {
-	JSON  bool
-	Token string
+	JSON             bool
+	Token            string
+	APIToken         string
+	APIBaseURL       string
+	APINotionVersion string
 }
 
 type CLI struct {
-	Token string `help:"Access token (skips OAuth)" env:"NOTION_ACCESS_TOKEN" hidden:""`
+	Token            string `help:"Access token (skips OAuth)" env:"NOTION_ACCESS_TOKEN" hidden:""`
+	APIToken         string `env:"NOTION_API_TOKEN" hidden:""`
+	APIBaseURL       string `env:"NOTION_API_BASE_URL" hidden:""`
+	APINotionVersion string `env:"NOTION_API_NOTION_VERSION" hidden:""`
 
 	Auth    AuthCmd    `cmd:"" help:"Authentication commands"`
 	Page    PageCmd    `cmd:"" help:"Page commands"`
