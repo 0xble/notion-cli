@@ -272,7 +272,7 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) err
 
 	markdown := string(content)
 	bgCtx := context.Background()
-	markdown, localUploads, err := prepareLocalImageUploads(bgCtx, file, markdown)
+	markdown, localUploads, err := prepareLocalImageUploads(ctx, bgCtx, file, markdown)
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -331,10 +331,10 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) err
 		return err
 	}
 	pageID := pageIDFromCreateResponse(resp)
-	if err := substituteUploadedLocalImages(bgCtx, pageID, localUploads); err != nil {
+	if err := substituteUploadedLocalImages(ctx, bgCtx, pageID, localUploads); err != nil {
 		finalErr := fmt.Errorf("insert uploaded local images: %w", err)
 		if pageID != "" {
-			if apiClient, apiErr := cli.RequireOfficialAPIClient(); apiErr == nil {
+			if apiClient, apiErr := cli.RequireOfficialAPIClient(officialAPIOverrides(ctx)); apiErr == nil {
 				if cleanupErr := apiClient.TrashPage(bgCtx, pageID); cleanupErr != nil {
 					finalErr = fmt.Errorf("%w (cleanup failed: %v)", finalErr, cleanupErr)
 				}
@@ -558,7 +558,7 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 	content := string(raw)
 	fm, body := cli.ParseFrontmatter(content)
 	bgCtx := context.Background()
-	body, localUploads, err := prepareLocalImageUploads(bgCtx, file, body)
+	body, localUploads, err := prepareLocalImageUploads(ctx, bgCtx, file, body)
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -583,7 +583,7 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 	if fm.NotionID != "" {
 		var snapshot *api.PageMarkdown
 		if len(localUploads) > 0 {
-			apiClient, err := cli.RequireOfficialAPIClient()
+			apiClient, err := cli.RequireOfficialAPIClient(officialAPIOverrides(ctx))
 			if err != nil {
 				output.PrintError(err)
 				return err
@@ -604,7 +604,7 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 			output.PrintError(err)
 			return err
 		}
-		if err := substituteUploadedLocalImages(bgCtx, fm.NotionID, localUploads); err != nil {
+		if err := substituteUploadedLocalImages(ctx, bgCtx, fm.NotionID, localUploads); err != nil {
 			finalErr := fmt.Errorf("insert uploaded local images: %w", err)
 			rollbackErr := rollbackSyncedPage(bgCtx, client, fm.NotionID, snapshot)
 			if rollbackErr != nil {
@@ -670,10 +670,10 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 	}
 
 	pageID := pageIDFromCreateResponse(resp)
-	if err := substituteUploadedLocalImages(bgCtx, pageID, localUploads); err != nil {
+	if err := substituteUploadedLocalImages(ctx, bgCtx, pageID, localUploads); err != nil {
 		finalErr := fmt.Errorf("insert uploaded local images: %w", err)
 		if pageID != "" {
-			if apiClient, apiErr := cli.RequireOfficialAPIClient(); apiErr == nil {
+			if apiClient, apiErr := cli.RequireOfficialAPIClient(officialAPIOverrides(ctx)); apiErr == nil {
 				if cleanupErr := apiClient.TrashPage(bgCtx, pageID); cleanupErr != nil {
 					finalErr = fmt.Errorf("%w (cleanup failed: %v)", finalErr, cleanupErr)
 				}

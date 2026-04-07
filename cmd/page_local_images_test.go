@@ -44,7 +44,10 @@ func TestPrepareLocalImageUploadsUploadsAndDeduplicates(t *testing.T) {
 	t.Setenv("NOTION_API_BASE_URL", srv.URL+"/v1")
 	t.Setenv("NOTION_API_TOKEN", "secret-token")
 
-	rewritten, uploads, err := prepareLocalImageUploads(context.Background(), doc, "![One](./diagram.png)\n![Two](./diagram.png)\n")
+	rewritten, uploads, err := prepareLocalImageUploads(&Context{
+		APIToken:   "secret-token",
+		APIBaseURL: srv.URL + "/v1",
+	}, context.Background(), doc, "![One](./diagram.png)\n![Two](./diagram.png)\n")
 	if err != nil {
 		t.Fatalf("prepareLocalImageUploads: %v", err)
 	}
@@ -105,7 +108,10 @@ func TestSubstituteUploadedLocalImagesAppendsAfterPlaceholderAndDeletes(t *testi
 	t.Setenv("NOTION_API_BASE_URL", srv.URL+"/v1")
 	t.Setenv("NOTION_API_TOKEN", "secret-token")
 
-	err := substituteUploadedLocalImages(context.Background(), "page_123", []uploadedLocalImage{{
+	err := substituteUploadedLocalImages(&Context{
+		APIToken:   "secret-token",
+		APIBaseURL: srv.URL + "/v1",
+	}, context.Background(), "page_123", []uploadedLocalImage{{
 		Alt:          "Diagram",
 		FileUploadID: "upload_123",
 		Placeholder:  "PLACEHOLDER",

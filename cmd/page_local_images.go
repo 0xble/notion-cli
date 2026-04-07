@@ -19,7 +19,7 @@ type uploadedLocalImage struct {
 	ResolvedPath string
 }
 
-func prepareLocalImageUploads(ctx context.Context, sourceFile, markdown string) (string, []uploadedLocalImage, error) {
+func prepareLocalImageUploads(cmdCtx *Context, ctx context.Context, sourceFile, markdown string) (string, []uploadedLocalImage, error) {
 	rewritten, placements, err := cli.RewriteStandaloneLocalImages(markdown, sourceFile)
 	if err != nil {
 		return "", nil, err
@@ -28,7 +28,7 @@ func prepareLocalImageUploads(ctx context.Context, sourceFile, markdown string) 
 		return markdown, nil, nil
 	}
 
-	apiClient, err := cli.RequireOfficialAPIClient()
+	apiClient, err := cli.RequireOfficialAPIClient(officialAPIOverrides(cmdCtx))
 	if err != nil {
 		return "", nil, err
 	}
@@ -72,12 +72,12 @@ func requireLocalImageParent(uploads []uploadedLocalImage, parent, parentDB stri
 	}
 }
 
-func substituteUploadedLocalImages(ctx context.Context, pageID string, uploads []uploadedLocalImage) error {
+func substituteUploadedLocalImages(cmdCtx *Context, ctx context.Context, pageID string, uploads []uploadedLocalImage) error {
 	if strings.TrimSpace(pageID) == "" || len(uploads) == 0 {
 		return nil
 	}
 
-	apiClient, err := cli.RequireOfficialAPIClient()
+	apiClient, err := cli.RequireOfficialAPIClient(officialAPIOverrides(cmdCtx))
 	if err != nil {
 		return err
 	}
