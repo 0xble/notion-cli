@@ -100,9 +100,15 @@ notion-cli page sync ./document.md --title "Custom Title"
 notion-cli page edit <page> --replace "New content"
 notion-cli page edit <page> --find "old text" --replace-with "new text"
 notion-cli page edit <page> --find "section" --append "additional content"
+
+# Archive a page
+notion-cli page archive https://notion.so/...
+notion-cli page archive 12345678-abcd-ef12-3456-7890abcdef12
 ```
 
 `page view` shows open page-level comments and inline block discussions by default. Inline discussions are rendered beside their anchor text, with the anchor wrapped in `[[...]]` and the discussion shown immediately below it. Use `--no-comments` when you only want the page body, `--raw` to inspect the original Notion markup, and `--json` when an agent needs the page plus the `Comments` array.
+
+`page archive` uses the official API fallback path and requires `notion-cli auth api setup` or `NOTION_API_TOKEN`.
 
 ### Edit mode guardrails
 
