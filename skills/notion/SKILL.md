@@ -31,11 +31,15 @@ The CLI uses OAuth authentication for MCP-backed commands. On first use, it open
 ```bash
 notion-cli auth login      # Authenticate with Notion
 notion-cli auth status     # Check authentication status
+notion-cli auth list       # Show local profiles and auth state
+notion-cli auth use work   # Persist the active profile
 notion-cli auth refresh    # Refresh token if status shows expired token
 notion-cli auth logout     # Clear credentials
+notion-cli --profile work auth login
+notion-cli --profile work auth api setup
 ```
 
-For CI/headless environments, set `NOTION_ACCESS_TOKEN` environment variable.
+For CI/headless environments, set `NOTION_ACCESS_TOKEN`. To isolate credentials per workspace/account, pass `--profile <name>` or set `NOTION_PROFILE`.
 
 Some fallback features also use the official Notion API:
 

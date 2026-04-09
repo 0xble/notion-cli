@@ -9,12 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lox/notion-cli/internal/config"
 	"github.com/mark3labs/mcp-go/client/transport"
-)
-
-const (
-	configDir  = ".config/notion-cli"
-	configFile = "token.json"
 )
 
 var ErrNoToken = errors.New("no token available")
@@ -24,14 +20,12 @@ type FileTokenStore struct {
 	mu   sync.RWMutex
 }
 
-func NewFileTokenStore() (*FileTokenStore, error) {
-	homeDir, err := os.UserHomeDir()
+func NewFileTokenStore(profile string) (*FileTokenStore, error) {
+	paths, err := config.PathsForProfile(profile)
 	if err != nil {
 		return nil, err
 	}
-
-	path := filepath.Join(homeDir, configDir, configFile)
-	return &FileTokenStore{path: path}, nil
+	return &FileTokenStore{path: paths.TokenPath}, nil
 }
 
 func (s *FileTokenStore) GetToken(ctx context.Context) (*transport.Token, error) {

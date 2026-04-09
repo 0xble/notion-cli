@@ -31,6 +31,9 @@ mise run build
 # Authenticate with Notion (opens browser for OAuth)
 notion-cli auth login
 
+# Authenticate using a named profile
+notion-cli --profile work auth login
+
 # Search your workspace
 notion-cli search "meeting notes"
 
@@ -55,7 +58,11 @@ notion-cli page create --title "New Page" --content "# Hello World"
 notion-cli auth login      # Authenticate with Notion via OAuth
 notion-cli auth refresh    # Refresh the access token
 notion-cli auth status     # Show authentication status
+notion-cli auth list       # List known profiles and auth state
+notion-cli auth use work   # Make a profile active by default
 notion-cli auth logout     # Clear stored credentials
+notion-cli --profile work auth login
+notion-cli --profile work auth api setup
 
 # Official API fallback auth for features MCP cannot handle directly
 notion-cli auth api setup     # Opens the internal integrations page, then prompts for token
@@ -169,10 +176,19 @@ The CLI uses Notion's remote MCP server with OAuth authentication. On first run,
 
 **Note:** Access tokens expire after 1 hour. The CLI automatically refreshes tokens when they expire or are about to expire, so you typically don't need to think about this. Use `notion-cli auth refresh` to manually refresh if needed.
 
+Profiles:
+
+- The default profile keeps the existing paths and behavior.
+- Pass `--profile <name>` or set `NOTION_PROFILE=<name>` to target a specific profile explicitly.
+- `notion-cli auth use <name>` persists the active profile used when no flag or env var is present.
+- Default profile files live under `~/.config/notion-cli/`.
+- Non-default profiles live under `~/.config/notion-cli/profiles/<name>/`.
+
 ## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
+| `NOTION_PROFILE` | Config profile name to use for OAuth token and official API config |
 | `NOTION_ACCESS_TOKEN` | Access token for CI/headless usage (skips OAuth) |
 | `NOTION_API_TOKEN` | Official Notion API token used for upload fallback and verification |
 | `NOTION_API_BASE_URL` | Override the official Notion API base URL |
