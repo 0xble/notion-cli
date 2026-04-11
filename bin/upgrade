@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BIN_PATH="${NOTION_CLI_INSTALL_PATH:-$HOME/.local/bin/notion-cli}"
+VERSION="$("$REPO_ROOT/bin/version")"
+
+mkdir -p "$(dirname "$BIN_PATH")"
+
+go -C "$REPO_ROOT" build -ldflags "-X main.version=$VERSION" -o "$BIN_PATH" .
+
+echo "Installed $BIN_PATH"
+echo "Version $VERSION"

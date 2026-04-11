@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BASE_VERSION="${NOTION_CLI_BASE_VERSION:-v0.5.0}"
+FORK_VERSION_SUFFIX="${NOTION_CLI_FORK_VERSION_SUFFIX:-0xble.0.1.0}"
+
+printf '%s-%s\n' "$BASE_VERSION" "$FORK_VERSION_SUFFIX"

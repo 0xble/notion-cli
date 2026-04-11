@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BIN_PATH="${NOTION_CLI_INSTALL_PATH:-$HOME/.local/bin/notion-cli}"
+EXPECTED_VERSION="$("$REPO_ROOT/bin/version")"
+
+if [[ ! -x "$BIN_PATH" ]]; then
+  echo "missing installed binary: $BIN_PATH" >&2
+  exit 1
+fi
+
+VERSION_OUTPUT="$("$BIN_PATH" --version 2>&1)"
+echo "$VERSION_OUTPUT"
+
+if ! printf '%s\n' "$VERSION_OUTPUT" | grep -Fq -- "$EXPECTED_VERSION"; then
+  echo "installed binary version mismatch: expected $EXPECTED_VERSION" >&2
+  exit 1
+fi
+
+"$BIN_PATH" --help >/dev/null
+echo "smoke ok"

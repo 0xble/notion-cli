@@ -6,15 +6,16 @@ svu = "3"
 [tasks.build]
 description = "Build the binary"
 run = """
-VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+VERSION=$(./bin/version)
 go build -ldflags "-X main.version=$VERSION" -o notion-cli .
 """
 
 [tasks.install]
-description = "Build and install to ~/bin"
+description = "Build and install to ~/.local/bin"
 run = """
-VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
-go build -ldflags "-X main.version=$VERSION" -o ~/bin/notion-cli .
+VERSION=$(./bin/version)
+mkdir -p "$HOME/.local/bin"
+go build -ldflags "-X main.version=$VERSION" -o "$HOME/.local/bin/notion-cli" .
 """
 
 [tasks.test]
