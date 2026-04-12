@@ -49,6 +49,25 @@ func TestReadOfficialAPITokenFromReader(t *testing.T) {
 	}
 }
 
+func TestLooksLikeNotionAPIToken(t *testing.T) {
+	valid := "ntn_Q757783358158rIe2zWtQzaPS0AERzY88Mi7HR3KruTbof"
+	if !looksLikeNotionAPIToken(valid) {
+		t.Fatalf("expected valid token format: %q", valid)
+	}
+
+	invalid := []string{
+		"",
+		"secret-token",
+		"ntn-short",
+		"ntn_bad-token",
+	}
+	for _, token := range invalid {
+		if looksLikeNotionAPIToken(token) {
+			t.Fatalf("expected invalid token format: %q", token)
+		}
+	}
+}
+
 func TestPrintOfficialAPITokenSetupHintIncludesURL(t *testing.T) {
 	var out bytes.Buffer
 
@@ -159,6 +178,42 @@ func TestAuthAPIVerifyJSON(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `"workspace_name": "Workspace"`) {
 		t.Fatalf("unexpected output: %s", out.String())
+	}
+}
+
+func TestAuthAPISetupWarnsWhenTokenFormatLooksWrong(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	var out bytes.Buffer
+	oldIn := authAPIInput
+	oldOut := authAPIOutput
+	authAPIInput = strings.NewReader("not-a-notion-token\n")
+	authAPIOutput = &out
+	t.Cleanup(func() {
+		authAPIInput = oldIn
+		authAPIOutput = oldOut
+	})
+
+	cmd := &AuthAPISetupCmd{}
+	stdout := captureStdout(t, func() {
+		if err := cmd.Run(&Context{}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	})
+
+	if !strings.Contains(stdout, "Official API token does not match the expected Notion token format") {
+		t.Fatalf("expected format warning: %q", stdout)
+	}
+	if !strings.Contains(out.String(), "Expected format: ntn_<letters-and-numbers>") {
+		t.Fatalf("expected token format hint: %q", out.String())
+	}
+
+	loaded, err := config.LoadWithMeta(config.APIOverrides{})
+	if err != nil {
+		t.Fatalf("LoadWithMeta: %v", err)
+	}
+	if loaded.Config.API.Token != "not-a-notion-token" {
+		t.Fatalf("token = %q, want not-a-notion-token", loaded.Config.API.Token)
 	}
 }
 
