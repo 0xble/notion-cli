@@ -79,6 +79,7 @@ notion-cli page view <page> --json             # Output as JSON
 notion-cli page create --title "Title"         # Create a page
 notion-cli page create --title "T" --content "Body text"
 notion-cli page create --title "T" --parent <page-id>
+notion-cli page archive <page-url-or-id>       # Archive a page via the official API
 
 # Upload a markdown file as a new page
 notion-cli page upload ./document.md                        # Title from # heading or filename
@@ -102,6 +103,8 @@ notion-cli page edit <page> -P "Status=Done" -P "Priority=1"             # Updat
 ```
 
 The `<page>` argument accepts a URL, ID, or page name.
+
+`page archive` accepts a page URL or page ID and moves that page to trash via the official API. This requires an official API token configured through `auth api setup` or `NOTION_API_TOKEN`.
 
 `page view` shows open page-level comments and inline block discussions by default. Inline discussions are rendered in context, with the anchor text wrapped in `[[...]]` and the discussion shown immediately below it. Use `--no-comments` to suppress comments, `--raw` to inspect the original Notion markup, and `--json` to return the page plus a `Comments` array.
 

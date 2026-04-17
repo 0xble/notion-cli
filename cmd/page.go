@@ -14,12 +14,13 @@ import (
 )
 
 type PageCmd struct {
-	List   PageListCmd   `cmd:"" help:"List pages"`
-	View   PageViewCmd   `cmd:"" help:"View a page"`
-	Create PageCreateCmd `cmd:"" help:"Create a page"`
-	Upload PageUploadCmd `cmd:"" help:"Upload a markdown file as a page"`
-	Sync   PageSyncCmd   `cmd:"" help:"Sync a markdown file to a page (create or update)"`
-	Edit   PageEditCmd   `cmd:"" help:"Edit a page"`
+	List    PageListCmd    `cmd:"" help:"List pages"`
+	View    PageViewCmd    `cmd:"" help:"View a page"`
+	Create  PageCreateCmd  `cmd:"" help:"Create a page"`
+	Upload  PageUploadCmd  `cmd:"" help:"Upload a markdown file as a page"`
+	Sync    PageSyncCmd    `cmd:"" help:"Sync a markdown file to a page (create or update)"`
+	Edit    PageEditCmd    `cmd:"" help:"Edit a page"`
+	Archive PageArchiveCmd `cmd:"" help:"Archive a page via the official API"`
 }
 
 var loadPageViewCommentsFn = loadPageViewComments
@@ -382,6 +383,37 @@ type PageEditCmd struct {
 
 func (c *PageEditCmd) Run(ctx *Context) error {
 	return runPageEdit(ctx, c.Page, c.Replace, c.Find, c.ReplaceWith, c.Append, c.Prop, c.AllowDeletingContent)
+}
+
+type PageArchiveCmd struct {
+	Page string `arg:"" help:"Page URL or ID"`
+}
+
+func (c *PageArchiveCmd) Run(ctx *Context) error {
+	return runPageArchive(ctx, c.Page)
+}
+
+func runPageArchive(ctx *Context, page string) error {
+	ref := cli.ParsePageRef(page)
+	if ref.Kind != cli.RefID {
+		err := &output.UserError{Message: "page archive requires a page URL or page ID"}
+		output.PrintError(err)
+		return err
+	}
+
+	apiClient, err := cli.RequireOfficialAPIClient(officialAPIOverrides(ctx))
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	if err := apiClient.TrashPage(context.Background(), ref.ID); err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	output.PrintSuccess("Page archived")
+	return nil
 }
 
 func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText string, props []string, allowDeletingContent bool) error {
