@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/fatih/color"
@@ -29,6 +30,7 @@ var authAPIInput io.Reader = os.Stdin
 var authAPIOutput io.Writer = os.Stdout
 var authAPIError io.Writer = os.Stderr
 var openOfficialAPIBrowser = mcp.OpenBrowser
+var notionAPITokenPattern = regexp.MustCompile(`^ntn_[A-Za-z0-9]{20,}$`)
 
 const officialAPIIntegrationsURL = "https://www.notion.so/profile/integrations/internal"
 
@@ -183,6 +185,10 @@ func (c *AuthAPISetupCmd) Run(ctx *Context) error {
 		err := fmt.Errorf("official API token cannot be empty")
 		output.PrintError(err)
 		return err
+	}
+	if !looksLikeNotionAPIToken(token) {
+		output.PrintWarning("Official API token does not match the expected Notion token format")
+		_, _ = fmt.Fprintln(authAPIOutput, "Expected format: ntn_<letters-and-numbers>")
 	}
 	if err := config.SetAPIToken(token); err != nil {
 		output.PrintError(err)
@@ -357,6 +363,10 @@ func readOfficialAPIToken(in io.Reader, out, errOut io.Writer) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(line), nil
+}
+
+func looksLikeNotionAPIToken(token string) bool {
+	return notionAPITokenPattern.MatchString(strings.TrimSpace(token))
 }
 
 func printOfficialAPITokenSetupHint(out io.Writer, shouldOpenBrowser bool) {
