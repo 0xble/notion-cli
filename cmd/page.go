@@ -345,7 +345,7 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string, ski
 		return err
 	}
 	pageID := pageIDFromCreateResponse(resp)
-	if err := substituteOrCleanup(ctx, bgCtx, pageID, localUploads); err != nil {
+	if err := substituteOrCleanup(ctx, bgCtx, pageID, resp.URL, localUploads); err != nil {
 		output.PrintError(err)
 		return err
 	}
@@ -749,7 +749,7 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 	}
 
 	pageID := pageIDFromCreateResponse(resp)
-	if err := substituteOrCleanup(ctx, bgCtx, pageID, localUploads); err != nil {
+	if err := substituteOrCleanup(ctx, bgCtx, pageID, resp.URL, localUploads); err != nil {
 		output.PrintError(err)
 		return err
 	}

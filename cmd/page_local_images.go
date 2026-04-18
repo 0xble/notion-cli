@@ -154,8 +154,11 @@ func checkLocalImageParent(markdown, parent, parentDB string) error {
 }
 
 // substituteOrCleanup substitutes uploaded local images into the page and
-// trashes the page on failure so it doesn't linger with placeholders.
-func substituteOrCleanup(cmdCtx *Context, ctx context.Context, pageID string, uploads []uploadedLocalImage) error {
+// trashes the page on failure so it doesn't linger with placeholders. When
+// pageID is empty (the create response omitted a parseable ID), we cannot
+// trash the page automatically, so the error message includes createdURL so
+// the user can delete the orphan manually.
+func substituteOrCleanup(cmdCtx *Context, ctx context.Context, pageID, createdURL string, uploads []uploadedLocalImage) error {
 	if err := substituteUploadedLocalImages(cmdCtx, ctx, pageID, uploads); err != nil {
 		finalErr := fmt.Errorf("insert uploaded local images: %w", err)
 		if pageID != "" {
@@ -166,6 +169,12 @@ func substituteOrCleanup(cmdCtx *Context, ctx context.Context, pageID string, up
 			} else {
 				finalErr = fmt.Errorf("%w (cleanup client init failed: %v)", finalErr, apiErr)
 			}
+		} else if len(uploads) > 0 {
+			ref := strings.TrimSpace(createdURL)
+			if ref == "" {
+				ref = "(no URL returned; check your workspace)"
+			}
+			finalErr = fmt.Errorf("%w (page was created but its ID could not be parsed, so placeholders remain and automatic cleanup is not possible; delete it manually: %s)", finalErr, ref)
 		}
 		return finalErr
 	}

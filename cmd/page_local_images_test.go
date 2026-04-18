@@ -152,6 +152,28 @@ func TestSubstituteUploadedLocalImagesErrorsWhenPageIDMissing(t *testing.T) {
 	}
 }
 
+func TestSubstituteOrCleanupReportsOrphanURLWhenPageIDMissing(t *testing.T) {
+	cmdCtx := &Context{APIToken: "secret-token"}
+	uploads := []uploadedLocalImage{{
+		Alt:          "Diagram",
+		FileUploadID: "upload_123",
+		Placeholder:  "PLACEHOLDER",
+		ResolvedPath: "/tmp/diagram.png",
+	}}
+
+	orphanURL := "https://www.notion.so/Page-1234567890abcdef1234567890abcdef"
+	err := substituteOrCleanup(cmdCtx, context.Background(), "", orphanURL, uploads)
+	if err == nil {
+		t.Fatalf("expected error when pageID is empty with pending uploads")
+	}
+	if !strings.Contains(err.Error(), orphanURL) {
+		t.Fatalf("error = %v, want orphan URL in message", err)
+	}
+	if !strings.Contains(err.Error(), "delete it manually") {
+		t.Fatalf("error = %v, want manual-delete guidance", err)
+	}
+}
+
 func TestSubstituteUploadedLocalImagesSkipsWithoutUploads(t *testing.T) {
 	cmdCtx := &Context{APIToken: "secret-token"}
 	if err := substituteUploadedLocalImages(cmdCtx, context.Background(), "", nil); err != nil {
