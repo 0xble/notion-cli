@@ -232,6 +232,9 @@ func rollbackSyncedPage(ctx context.Context, client pageUpdater, pageID string, 
 	if snapshot.Truncated {
 		return fmt.Errorf("skipped rollback: page markdown snapshot was truncated; replaying would lose content")
 	}
+	if len(snapshot.UnknownBlockIDs) > 0 {
+		return fmt.Errorf("skipped rollback: page markdown snapshot omits %d block(s) that cannot be represented in markdown; replaying would drop them", len(snapshot.UnknownBlockIDs))
+	}
 	return client.UpdatePage(ctx, mcp.UpdatePageRequest{
 		PageID:     pageID,
 		Command:    "replace_content",

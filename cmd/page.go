@@ -604,6 +604,11 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 				output.PrintError(finalErr)
 				return finalErr
 			}
+			if len(snapshot.UnknownBlockIDs) > 0 {
+				finalErr := fmt.Errorf("cannot sync local images safely: page %s contains %d block(s) that cannot be represented in markdown, so rollback on a failed substitution would drop them. Retry without local images or remove the unsupported blocks before syncing", fm.NotionID, len(snapshot.UnknownBlockIDs))
+				output.PrintError(finalErr)
+				return finalErr
+			}
 		}
 
 		body, localUploads, err = prepareLocalImageUploads(ctx, bgCtx, file, body)

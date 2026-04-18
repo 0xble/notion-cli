@@ -199,6 +199,21 @@ func TestRollbackSyncedPageSkipsTruncatedSnapshot(t *testing.T) {
 	}
 }
 
+func TestRollbackSyncedPageSkipsUnknownBlocks(t *testing.T) {
+	snapshot := &api.PageMarkdown{
+		Markdown:        "# Title\n\nLossy content\n",
+		UnknownBlockIDs: []string{"block-1", "block-2"},
+	}
+
+	err := rollbackSyncedPage(context.Background(), nil, "page-id", snapshot)
+	if err == nil {
+		t.Fatalf("rollbackSyncedPage returned nil error; expected unknown-blocks error")
+	}
+	if !strings.Contains(err.Error(), "cannot be represented in markdown") {
+		t.Fatalf("rollbackSyncedPage error = %q, want it to mention unrepresentable blocks", err.Error())
+	}
+}
+
 func TestRollbackSyncedPageSkipsNilSnapshot(t *testing.T) {
 	if err := rollbackSyncedPage(context.Background(), nil, "page-id", nil); err != nil {
 		t.Fatalf("rollbackSyncedPage returned %v, want nil", err)
