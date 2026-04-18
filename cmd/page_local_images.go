@@ -60,8 +60,8 @@ func prepareLocalImageUploads(cmdCtx *Context, ctx context.Context, sourceFile, 
 	return rewritten, uploads, nil
 }
 
-func stripLocalImages(sourceFile, markdown string) (string, error) {
-	rewritten, placements, err := cli.RewriteStandaloneLocalImages(markdown, sourceFile)
+func stripLocalImages(markdown string) (string, error) {
+	rewritten, placements, err := cli.FindStandaloneLocalImageLines(markdown)
 	if err != nil {
 		return "", err
 	}

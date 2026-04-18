@@ -275,7 +275,7 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string, ski
 	bgCtx := context.Background()
 	var localUploads []uploadedLocalImage
 	if skipLocalImages {
-		markdown, err = stripLocalImages(file, markdown)
+		markdown, err = stripLocalImages(markdown)
 		if err != nil {
 			output.PrintError(err)
 			return err
@@ -573,7 +573,7 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 	bgCtx := context.Background()
 	var localUploads []uploadedLocalImage
 	if skipLocalImages {
-		body, err = stripLocalImages(file, body)
+		body, err = stripLocalImages(body)
 		if err != nil {
 			output.PrintError(err)
 			return err

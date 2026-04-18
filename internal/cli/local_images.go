@@ -29,6 +29,40 @@ func RewriteStandaloneLocalImages(markdown, sourceFile string) (string, []LocalI
 	}
 	sourceDir := filepath.Dir(sourceFileAbs)
 
+	return scanStandaloneLocalImages(markdown, func(dest string) (string, error) {
+		resolvedPath, err := resolveLocalPath(dest, sourceDir)
+		if err != nil {
+			return "", err
+		}
+		info, err := os.Stat(resolvedPath)
+		if err != nil {
+			return "", fmt.Errorf("local image %q not found (from %s): %w", dest, sourceFile, err)
+		}
+		if info.IsDir() {
+			return "", fmt.Errorf("local image %q resolves to a directory: %s", dest, resolvedPath)
+		}
+		return resolvedPath, nil
+	})
+}
+
+// FindStandaloneLocalImageLines rewrites standalone local image lines into
+// placeholders without validating that the referenced files exist on disk. It
+// still rejects inline or mixed-content local image syntax with the same error
+// as RewriteStandaloneLocalImages, preserving the "local images must appear on
+// their own line" invariant. Use this when the caller only needs to identify
+// and strip local image lines (e.g. page upload/sync --skip-local-images) and
+// does not need the resolved file path.
+func FindStandaloneLocalImageLines(markdown string) (string, []LocalImagePlacement, error) {
+	return scanStandaloneLocalImages(markdown, nil)
+}
+
+// scanStandaloneLocalImages walks markdown line-by-line, rejecting inline local
+// images and replacing each standalone local image line with a placeholder.
+// When resolvePath is non-nil, it is invoked for every local destination and
+// its returned path is stored on the placement's Resolved field; a non-nil
+// error from resolvePath aborts the scan. When resolvePath is nil, placements
+// are recorded without a Resolved path.
+func scanStandaloneLocalImages(markdown string, resolvePath func(dest string) (string, error)) (string, []LocalImagePlacement, error) {
 	normalizedMarkdown := strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(markdown)
 	lines := strings.Split(normalizedMarkdown, "\n")
 	placements := make([]LocalImagePlacement, 0)
@@ -54,16 +88,13 @@ func RewriteStandaloneLocalImages(markdown, sourceFile string) (string, []LocalI
 			continue
 		}
 
-		resolvedPath, err := resolveLocalPath(dest, sourceDir)
-		if err != nil {
-			return "", nil, err
-		}
-		info, err := os.Stat(resolvedPath)
-		if err != nil {
-			return "", nil, fmt.Errorf("local image %q not found (from %s): %w", dest, sourceFile, err)
-		}
-		if info.IsDir() {
-			return "", nil, fmt.Errorf("local image %q resolves to a directory: %s", dest, resolvedPath)
+		var resolvedPath string
+		if resolvePath != nil {
+			r, err := resolvePath(dest)
+			if err != nil {
+				return "", nil, err
+			}
+			resolvedPath = r
 		}
 
 		placeholder := "NOTION_CLI_LOCAL_IMAGE_" + strings.ReplaceAll(uuid.NewString(), "-", "_")
