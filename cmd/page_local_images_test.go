@@ -11,7 +11,18 @@ import (
 	"testing"
 
 	"github.com/lox/notion-cli/internal/api"
+	"github.com/lox/notion-cli/internal/mcp"
 )
+
+type fakePageUpdater struct {
+	calls []mcp.UpdatePageRequest
+	err   error
+}
+
+func (f *fakePageUpdater) UpdatePage(_ context.Context, req mcp.UpdatePageRequest) error {
+	f.calls = append(f.calls, req)
+	return f.err
+}
 
 func TestPrepareLocalImageUploadsUploadsAndDeduplicates(t *testing.T) {
 	tmp := t.TempDir()
@@ -170,9 +181,48 @@ func TestRollbackSyncedPageSkipsNilSnapshot(t *testing.T) {
 	}
 }
 
-func TestRollbackSyncedPageSkipsEmptyMarkdownSnapshot(t *testing.T) {
-	snapshot := &api.PageMarkdown{Markdown: "   \n"}
-	if err := rollbackSyncedPage(context.Background(), nil, "page-id", snapshot); err != nil {
+func TestRollbackSyncedPageReplacesEmptyMarkdownSnapshot(t *testing.T) {
+	snapshot := &api.PageMarkdown{Markdown: ""}
+	updater := &fakePageUpdater{}
+
+	if err := rollbackSyncedPage(context.Background(), updater, "page-id", snapshot); err != nil {
 		t.Fatalf("rollbackSyncedPage returned %v, want nil", err)
+	}
+	if len(updater.calls) != 1 {
+		t.Fatalf("len(updater.calls) = %d, want 1 (empty snapshot should still restore previous empty state)", len(updater.calls))
+	}
+	got := updater.calls[0]
+	if got.PageID != "page-id" || got.Command != "replace_content" || got.NewContent != "" {
+		t.Fatalf("unexpected UpdatePage request: %#v", got)
+	}
+}
+
+func TestRollbackSyncedPageReplacesWhitespaceSnapshot(t *testing.T) {
+	snapshot := &api.PageMarkdown{Markdown: "   \n"}
+	updater := &fakePageUpdater{}
+
+	if err := rollbackSyncedPage(context.Background(), updater, "page-id", snapshot); err != nil {
+		t.Fatalf("rollbackSyncedPage returned %v, want nil", err)
+	}
+	if len(updater.calls) != 1 {
+		t.Fatalf("len(updater.calls) = %d, want 1", len(updater.calls))
+	}
+	if got := updater.calls[0].NewContent; got != "   \n" {
+		t.Fatalf("NewContent = %q, want whitespace snapshot preserved verbatim", got)
+	}
+}
+
+func TestRollbackSyncedPageReplacesNonEmptySnapshot(t *testing.T) {
+	snapshot := &api.PageMarkdown{Markdown: "# Previous\n\nbody\n"}
+	updater := &fakePageUpdater{}
+
+	if err := rollbackSyncedPage(context.Background(), updater, "page-id", snapshot); err != nil {
+		t.Fatalf("rollbackSyncedPage returned %v, want nil", err)
+	}
+	if len(updater.calls) != 1 {
+		t.Fatalf("len(updater.calls) = %d, want 1", len(updater.calls))
+	}
+	if got := updater.calls[0].NewContent; got != "# Previous\n\nbody\n" {
+		t.Fatalf("NewContent = %q, want snapshot markdown", got)
 	}
 }

@@ -141,8 +141,12 @@ func substituteUploadedLocalImages(cmdCtx *Context, ctx context.Context, pageID 
 	return nil
 }
 
-func rollbackSyncedPage(ctx context.Context, client *mcp.Client, pageID string, snapshot *api.PageMarkdown) error {
-	if snapshot == nil || strings.TrimSpace(snapshot.Markdown) == "" {
+type pageUpdater interface {
+	UpdatePage(ctx context.Context, req mcp.UpdatePageRequest) error
+}
+
+func rollbackSyncedPage(ctx context.Context, client pageUpdater, pageID string, snapshot *api.PageMarkdown) error {
+	if snapshot == nil {
 		return nil
 	}
 	if snapshot.Truncated {
