@@ -158,12 +158,18 @@ type markdownImageMatch struct {
 
 // findMarkdownImages returns every `![alt](dest)` span on a single line.
 // Destinations may contain balanced parentheses and `\)` / `\(` escapes, and
-// may optionally be wrapped in angle brackets (`<dest>`). The returned `dest`
-// is the raw text between the opening `(` and the matching `)`, preserving
-// escapes for parseMarkdownDestination to normalize.
+// may optionally be wrapped in angle brackets (`<dest>`). A backslash before
+// `!` escapes the image marker so `\![...]` is treated as literal text.
+// The returned `dest` is the raw text between the opening `(` and the
+// matching `)`, preserving escapes for parseMarkdownDestination to normalize.
 func findMarkdownImages(line string) []markdownImageMatch {
 	var matches []markdownImageMatch
-	for i := 0; i < len(line); {
+	i := 0
+	for i < len(line) {
+		if line[i] == '\\' && i+1 < len(line) {
+			i += 2
+			continue
+		}
 		if line[i] != '!' || i+1 >= len(line) || line[i+1] != '[' {
 			i++
 			continue
@@ -223,7 +229,8 @@ func findLinkTextEnd(line string, start int) (int, bool) {
 // findDestinationEnd returns the offset of the `)` that closes a markdown
 // destination starting at `start`. Balanced parens and `\(` / `\)` escapes
 // inside the destination are preserved; angle-bracketed destinations end at
-// the first unescaped `>` followed immediately by `)`.
+// the first unescaped `>`, optionally followed by a whitespace-separated title
+// in `"..."`, `'...'`, or `(...)` form before the closing `)`.
 func findDestinationEnd(line string, start int) (int, bool) {
 	if start < len(line) && line[start] == '<' {
 		for i := start + 1; i < len(line); i++ {
@@ -233,10 +240,7 @@ func findDestinationEnd(line string, start int) (int, bool) {
 				continue
 			}
 			if c == '>' {
-				if i+1 < len(line) && line[i+1] == ')' {
-					return i + 1, true
-				}
-				return 0, false
+				return skipOptionalTitleAndClose(line, i+1)
 			}
 		}
 		return 0, false
@@ -258,6 +262,55 @@ func findDestinationEnd(line string, start int) (int, bool) {
 			}
 			depth--
 		}
+	}
+	return 0, false
+}
+
+// skipOptionalTitleAndClose returns the offset of the `)` that terminates a
+// markdown image after an optional whitespace-separated title, starting at
+// the first character after the destination (or after the closing `>` of an
+// angle-bracketed destination).
+func skipOptionalTitleAndClose(line string, i int) (int, bool) {
+	for i < len(line) && (line[i] == ' ' || line[i] == '\t') {
+		i++
+	}
+	if i >= len(line) {
+		return 0, false
+	}
+	if line[i] == ')' {
+		return i, true
+	}
+	var closeQuote byte
+	switch line[i] {
+	case '"':
+		closeQuote = '"'
+	case '\'':
+		closeQuote = '\''
+	case '(':
+		closeQuote = ')'
+	default:
+		return 0, false
+	}
+	for i++; i < len(line); i++ {
+		if line[i] == '\\' && i+1 < len(line) {
+			i++
+			continue
+		}
+		if line[i] == closeQuote {
+			break
+		}
+	}
+	if i >= len(line) {
+		return 0, false
+	}
+	for i++; i < len(line); i++ {
+		if line[i] == ' ' || line[i] == '\t' {
+			continue
+		}
+		if line[i] == ')' {
+			return i, true
+		}
+		return 0, false
 	}
 	return 0, false
 }

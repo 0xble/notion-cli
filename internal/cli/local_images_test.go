@@ -272,6 +272,43 @@ func TestFindStandaloneLocalImageLinesIgnoresProtocolRelativeURLs(t *testing.T) 
 	}
 }
 
+func TestRewriteStandaloneLocalImagesSupportsAngleBracketDestinationWithTitle(t *testing.T) {
+	tmp := t.TempDir()
+	doc := filepath.Join(tmp, "doc.md")
+	img := filepath.Join(tmp, "diagram 1.png")
+	if err := os.WriteFile(img, []byte("PNG"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	rewritten, placements, err := RewriteStandaloneLocalImages(`![Alt](<./diagram 1.png> "caption")`+"\n", doc)
+	if err != nil {
+		t.Fatalf("RewriteStandaloneLocalImages: %v", err)
+	}
+	if len(placements) != 1 {
+		t.Fatalf("len(placements) = %d, want 1", len(placements))
+	}
+	if placements[0].Resolved != img {
+		t.Fatalf("Resolved = %q, want %q", placements[0].Resolved, img)
+	}
+	if strings.Contains(rewritten, "./diagram 1.png") {
+		t.Fatalf("rewritten should have replaced angle-bracket image line: %q", rewritten)
+	}
+}
+
+func TestFindStandaloneLocalImageLinesIgnoresEscapedImageMarker(t *testing.T) {
+	input := `\![Demo](./example.png)` + "\n"
+	rewritten, placements, err := FindStandaloneLocalImageLines(input)
+	if err != nil {
+		t.Fatalf("FindStandaloneLocalImageLines: %v", err)
+	}
+	if len(placements) != 0 {
+		t.Fatalf("len(placements) = %d, want 0 (escaped ! should be literal text)", len(placements))
+	}
+	if rewritten != input {
+		t.Fatalf("rewritten = %q, want input unchanged", rewritten)
+	}
+}
+
 func TestFindStandaloneLocalImageLinesTreatsImageOutsideFenceAsStandalone(t *testing.T) {
 	markdown := strings.Join([]string{
 		"```",
