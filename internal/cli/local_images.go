@@ -196,16 +196,25 @@ func findMarkdownImages(line string) []markdownImageMatch {
 }
 
 // findLinkTextEnd walks `line` from `start` and returns the offset of the
-// unescaped `]` that closes the link text, honoring `\]` escapes.
+// unescaped `]` that closes the link text, honoring `\]` escapes and balanced
+// nested `[`/`]` pairs so alt text like `Architecture [v2]` parses as a single
+// image.
 func findLinkTextEnd(line string, start int) (int, bool) {
+	depth := 0
 	for i := start; i < len(line); i++ {
 		c := line[i]
 		if c == '\\' && i+1 < len(line) {
 			i++
 			continue
 		}
-		if c == ']' {
-			return i, true
+		switch c {
+		case '[':
+			depth++
+		case ']':
+			if depth == 0 {
+				return i, true
+			}
+			depth--
 		}
 	}
 	return 0, false
@@ -409,9 +418,9 @@ func isLocalDestination(dest string) bool {
 
 	lower := strings.ToLower(d)
 	switch {
-	case strings.HasPrefix(lower, "#"):
-		return false
-	case strings.HasPrefix(lower, "http://"),
+	case strings.HasPrefix(lower, "#"),
+		strings.HasPrefix(lower, "//"),
+		strings.HasPrefix(lower, "http://"),
 		strings.HasPrefix(lower, "https://"),
 		strings.HasPrefix(lower, "mailto:"),
 		strings.HasPrefix(lower, "tel:"),

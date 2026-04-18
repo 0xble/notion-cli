@@ -233,6 +233,45 @@ func TestFindStandaloneLocalImageLinesSkipsIndentedCodeBlock(t *testing.T) {
 	}
 }
 
+func TestRewriteStandaloneLocalImagesSupportsNestedBracketsInAltText(t *testing.T) {
+	tmp := t.TempDir()
+	doc := filepath.Join(tmp, "doc.md")
+	img := filepath.Join(tmp, "diagram.png")
+	if err := os.WriteFile(img, []byte("PNG"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	rewritten, placements, err := RewriteStandaloneLocalImages("![Architecture [v2]](./diagram.png)\n", doc)
+	if err != nil {
+		t.Fatalf("RewriteStandaloneLocalImages: %v", err)
+	}
+	if len(placements) != 1 {
+		t.Fatalf("len(placements) = %d, want 1", len(placements))
+	}
+	if placements[0].Alt != "Architecture [v2]" {
+		t.Fatalf("Alt = %q, want \"Architecture [v2]\"", placements[0].Alt)
+	}
+	if placements[0].Resolved != img {
+		t.Fatalf("Resolved = %q, want %q", placements[0].Resolved, img)
+	}
+	if strings.Contains(rewritten, "./diagram.png") {
+		t.Fatalf("rewritten should have replaced nested-bracket image line: %q", rewritten)
+	}
+}
+
+func TestFindStandaloneLocalImageLinesIgnoresProtocolRelativeURLs(t *testing.T) {
+	rewritten, placements, err := FindStandaloneLocalImageLines("![CDN](//cdn.example.com/image.png)\n")
+	if err != nil {
+		t.Fatalf("FindStandaloneLocalImageLines: %v", err)
+	}
+	if len(placements) != 0 {
+		t.Fatalf("len(placements) = %d, want 0 (protocol-relative URL should be treated as remote)", len(placements))
+	}
+	if rewritten != "![CDN](//cdn.example.com/image.png)\n" {
+		t.Fatalf("rewritten = %q, want input unchanged", rewritten)
+	}
+}
+
 func TestFindStandaloneLocalImageLinesTreatsImageOutsideFenceAsStandalone(t *testing.T) {
 	markdown := strings.Join([]string{
 		"```",
