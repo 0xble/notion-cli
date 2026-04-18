@@ -1,11 +1,14 @@
 package cmd
 
+import "github.com/lox/notion-cli/internal/profile"
+
 type Context struct {
 	JSON             bool
 	Token            string
 	APIToken         string
 	APIBaseURL       string
 	APINotionVersion string
+	Profile          profile.Profile
 }
 
 type CLI struct {
@@ -13,6 +16,7 @@ type CLI struct {
 	APIToken         string `env:"NOTION_API_TOKEN" hidden:""`
 	APIBaseURL       string `env:"NOTION_API_BASE_URL" hidden:""`
 	APINotionVersion string `env:"NOTION_API_NOTION_VERSION" hidden:""`
+	Profile          string `help:"Notion account profile to use (also reads $NOTION_CLI_PROFILE)" env:"NOTION_CLI_PROFILE" name:"profile"`
 
 	Auth    AuthCmd    `cmd:"" help:"Authentication commands"`
 	Page    PageCmd    `cmd:"" help:"Page commands"`
