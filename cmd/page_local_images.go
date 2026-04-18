@@ -15,8 +15,13 @@ import (
 	"github.com/lox/notion-cli/internal/output"
 )
 
-// localImageUploadConcurrency caps concurrent local image uploads.
-const localImageUploadConcurrency = 4
+// localImageUploadConcurrency caps concurrent local image uploads. Each
+// upload fires at least three sequential Notion API calls (create file
+// upload, send, then poll for upload status), so even serial work lives
+// right at Notion's documented ~3 req/sec average limit. Fanning out
+// in parallel without a shared rate limiter and 429/Retry-After backoff
+// reliably trips rate limits on pages with several images.
+const localImageUploadConcurrency = 1
 
 type uploadedLocalImage struct {
 	Alt          string
