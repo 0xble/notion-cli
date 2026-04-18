@@ -5,12 +5,18 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/lox/notion-cli/internal/api"
 	"github.com/lox/notion-cli/internal/cli"
 	"github.com/lox/notion-cli/internal/mcp"
 	"github.com/lox/notion-cli/internal/output"
 )
+
+// localImageUploadConcurrency caps concurrent local image uploads.
+const localImageUploadConcurrency = 4
 
 type uploadedLocalImage struct {
 	Alt          string
@@ -33,31 +39,71 @@ func prepareLocalImageUploads(cmdCtx *Context, ctx context.Context, sourceFile, 
 		return "", nil, err
 	}
 
-	uploadIDByPath := make(map[string]string, len(placements))
+	// Collect the unique set of resolved paths to upload so we do one upload
+	// per distinct file even when the same image appears in multiple
+	// placements.
+	distinctPaths := make([]string, 0, len(placements))
+	seen := make(map[string]struct{}, len(placements))
+	for _, placement := range placements {
+		if _, ok := seen[placement.Resolved]; ok {
+			continue
+		}
+		seen[placement.Resolved] = struct{}{}
+		distinctPaths = append(distinctPaths, placement.Resolved)
+	}
+
+	uploadIDByPath := make(map[string]string, len(distinctPaths))
+	var mu sync.Mutex
+
+	group, gctx := errgroup.WithContext(ctx)
+	group.SetLimit(localImageUploadConcurrency)
+	for _, path := range distinctPaths {
+		path := path
+		group.Go(func() error {
+			uploadID, err := uploadLocalImage(gctx, apiClient, path)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			uploadIDByPath[path] = uploadID
+			mu.Unlock()
+			return nil
+		})
+	}
+	if err := group.Wait(); err != nil {
+		return "", nil, err
+	}
+
 	uploads := make([]uploadedLocalImage, 0, len(placements))
 	for _, placement := range placements {
-		uploadID, ok := uploadIDByPath[placement.Resolved]
-		if !ok {
-			fileData, err := os.ReadFile(placement.Resolved)
-			if err != nil {
-				return "", nil, fmt.Errorf("read local image %q: %w", placement.Resolved, err)
-			}
-			uploadID, err = apiClient.UploadFile(ctx, placement.Resolved, fileData)
-			if err != nil {
-				return "", nil, fmt.Errorf("upload local image %q: %w", placement.Resolved, err)
-			}
-			uploadIDByPath[placement.Resolved] = uploadID
-		}
-
 		uploads = append(uploads, uploadedLocalImage{
 			Alt:          placement.Alt,
-			FileUploadID: uploadID,
+			FileUploadID: uploadIDByPath[placement.Resolved],
 			Placeholder:  placement.Placeholder,
 			ResolvedPath: placement.Resolved,
 		})
 	}
 
 	return rewritten, uploads, nil
+}
+
+func uploadLocalImage(ctx context.Context, apiClient *api.Client, path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("open local image %q: %w", path, err)
+	}
+	defer func() { _ = f.Close() }()
+
+	info, err := f.Stat()
+	if err != nil {
+		return "", fmt.Errorf("stat local image %q: %w", path, err)
+	}
+
+	uploadID, err := apiClient.UploadFile(ctx, path, info.Size(), f)
+	if err != nil {
+		return "", fmt.Errorf("upload local image %q: %w", path, err)
+	}
+	return uploadID, nil
 }
 
 func stripLocalImages(markdown string) (string, error) {
@@ -83,10 +129,9 @@ func stripLocalImages(markdown string) (string, error) {
 	return strings.Join(lines, "\n"), nil
 }
 
-// checkLocalImageParent scans markdown for standalone local images without
-// performing remote uploads and returns a parent-required error when the user
-// provided neither --parent nor --parent-db. Call before prepareLocalImageUploads
-// so missing-parent failures don't leave orphaned file uploads in Notion.
+// checkLocalImageParent returns a parent-required error when markdown has
+// standalone local images but the caller provided neither --parent nor
+// --parent-db.
 func checkLocalImageParent(markdown, parent, parentDB string) error {
 	_, placements, err := cli.FindStandaloneLocalImageLines(markdown)
 	if err != nil {
@@ -101,6 +146,25 @@ func checkLocalImageParent(markdown, parent, parentDB string) error {
 	return &output.UserError{
 		Message: "standalone local image upload requires --parent or --parent-db shared with your Notion integration",
 	}
+}
+
+// substituteOrCleanup substitutes uploaded local images into the page and
+// trashes the page on failure so it doesn't linger with placeholders.
+func substituteOrCleanup(cmdCtx *Context, ctx context.Context, pageID string, uploads []uploadedLocalImage) error {
+	if err := substituteUploadedLocalImages(cmdCtx, ctx, pageID, uploads); err != nil {
+		finalErr := fmt.Errorf("insert uploaded local images: %w", err)
+		if pageID != "" {
+			if apiClient, apiErr := cli.RequireOfficialAPIClient(officialAPIOverrides(cmdCtx)); apiErr == nil {
+				if cleanupErr := apiClient.TrashPage(ctx, pageID); cleanupErr != nil {
+					finalErr = fmt.Errorf("%w (cleanup failed: %v)", finalErr, cleanupErr)
+				}
+			} else {
+				finalErr = fmt.Errorf("%w (cleanup client init failed: %v)", finalErr, apiErr)
+			}
+		}
+		return finalErr
+	}
+	return nil
 }
 
 func substituteUploadedLocalImages(cmdCtx *Context, ctx context.Context, pageID string, uploads []uploadedLocalImage) error {
@@ -123,7 +187,7 @@ func substituteUploadedLocalImages(cmdCtx *Context, ctx context.Context, pageID 
 
 	blocksByPlaceholder := make(map[string]api.Block, len(uploads))
 	for _, block := range blocks {
-		if block.Type != "paragraph" || block.Paragraph == nil {
+		if block.Type != api.BlockTypeParagraph || block.Paragraph == nil {
 			continue
 		}
 		text := paragraphPlainText(block)

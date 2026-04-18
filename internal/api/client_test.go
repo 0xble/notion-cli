@@ -116,7 +116,7 @@ func TestUploadFileAndAppendAfter(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 
-	uploadID, err := client.UploadFile(context.Background(), `diag"ram.png`, []byte("PNGDATA"))
+	uploadID, err := client.UploadFileBytes(context.Background(), `diag"ram.png`, []byte("PNGDATA"))
 	if err != nil {
 		t.Fatalf("UploadFile: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestUploadFileRetriesEmptyAndPendingStatuses(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 
-	uploadID, err := client.UploadFile(context.Background(), "diagram.png", []byte("PNGDATA"))
+	uploadID, err := client.UploadFileBytes(context.Background(), "diagram.png", []byte("PNGDATA"))
 	if err != nil {
 		t.Fatalf("UploadFile: %v", err)
 	}
