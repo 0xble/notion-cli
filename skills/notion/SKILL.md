@@ -30,12 +30,24 @@ The CLI uses OAuth authentication. On first use, it opens a browser for authoriz
 
 ```bash
 notion-cli auth login      # Authenticate with Notion
-notion-cli auth status     # Check authentication status
+notion-cli auth status     # Check authentication status (also shows active profile)
 notion-cli auth refresh    # Refresh token if status shows expired token
 notion-cli auth logout     # Clear credentials
 ```
 
 For CI/headless environments, set `NOTION_ACCESS_TOKEN` environment variable.
+
+### Multiple accounts
+
+Every command accepts `--profile <name>` (or `NOTION_CLI_PROFILE`) to target a specific Notion account. Named profiles keep credentials isolated under `~/.config/notion-cli/<profile>/`; the implicit default profile uses the existing top-level paths.
+
+```bash
+notion-cli auth login --profile work
+notion-cli page list --profile work
+export NOTION_CLI_PROFILE=work  # pin for the shell session
+```
+
+Resolution precedence: `--profile` > `NOTION_CLI_PROFILE` > `default_profile` in `~/.config/notion-cli/settings.json` > implicit top-level default. If none resolve, the CLI fails with `No profile specified.` instead of acting silently.
 
 ## Available Commands
 
