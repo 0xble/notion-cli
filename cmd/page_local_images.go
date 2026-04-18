@@ -121,7 +121,12 @@ func stripLocalImages(markdown string) (string, error) {
 		placeholders[placement.Placeholder] = struct{}{}
 	}
 	for i, line := range lines {
-		if _, ok := placeholders[line]; ok {
+		// scanStandaloneLocalImages preserves the whitespace that surrounded
+		// the image so block context is not lost during upload. In strip
+		// mode we need to match on the trimmed placeholder so indented or
+		// trailing-whitespace image lines are also cleared rather than left
+		// as NOTION_CLI_LOCAL_IMAGE_* text in the published page.
+		if _, ok := placeholders[strings.TrimSpace(line)]; ok {
 			lines[i] = ""
 		}
 	}
