@@ -120,3 +120,137 @@ func TestFindStandaloneLocalImageLinesIgnoresRemoteImages(t *testing.T) {
 		t.Fatalf("rewritten = %q", rewritten)
 	}
 }
+
+func TestRewriteStandaloneLocalImagesSupportsBalancedParensInDestination(t *testing.T) {
+	tmp := t.TempDir()
+	doc := filepath.Join(tmp, "doc.md")
+	img := filepath.Join(tmp, "diagram(1).png")
+	if err := os.WriteFile(img, []byte("PNG"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	rewritten, placements, err := RewriteStandaloneLocalImages("![Diagram](./diagram(1).png)\n", doc)
+	if err != nil {
+		t.Fatalf("RewriteStandaloneLocalImages: %v", err)
+	}
+	if len(placements) != 1 {
+		t.Fatalf("len(placements) = %d, want 1", len(placements))
+	}
+	if placements[0].Resolved != img {
+		t.Fatalf("Resolved = %q, want %q", placements[0].Resolved, img)
+	}
+	if !strings.Contains(rewritten, placements[0].Placeholder) {
+		t.Fatalf("rewritten markdown missing placeholder: %q", rewritten)
+	}
+}
+
+func TestRewriteStandaloneLocalImagesSupportsEscapedParensInDestination(t *testing.T) {
+	tmp := t.TempDir()
+	doc := filepath.Join(tmp, "doc.md")
+	img := filepath.Join(tmp, "diagram(final).png")
+	if err := os.WriteFile(img, []byte("PNG"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	rewritten, placements, err := RewriteStandaloneLocalImages(`![Diagram](./diagram\(final\).png)`+"\n", doc)
+	if err != nil {
+		t.Fatalf("RewriteStandaloneLocalImages: %v", err)
+	}
+	if len(placements) != 1 {
+		t.Fatalf("len(placements) = %d, want 1", len(placements))
+	}
+	if placements[0].Resolved != img {
+		t.Fatalf("Resolved = %q, want %q", placements[0].Resolved, img)
+	}
+	if placements[0].Original != "./diagram(final).png" {
+		t.Fatalf("Original = %q, want unescaped destination", placements[0].Original)
+	}
+	if !strings.Contains(rewritten, placements[0].Placeholder) {
+		t.Fatalf("rewritten markdown missing placeholder: %q", rewritten)
+	}
+}
+
+func TestFindStandaloneLocalImageLinesSkipsBacktickFencedCodeBlock(t *testing.T) {
+	markdown := strings.Join([]string{
+		"before",
+		"",
+		"```",
+		"![Demo](./example.png)",
+		"```",
+		"",
+		"after",
+		"",
+	}, "\n")
+
+	rewritten, placements, err := FindStandaloneLocalImageLines(markdown)
+	if err != nil {
+		t.Fatalf("FindStandaloneLocalImageLines: %v", err)
+	}
+	if len(placements) != 0 {
+		t.Fatalf("len(placements) = %d, want 0 (image inside fenced code block should be ignored)", len(placements))
+	}
+	if rewritten != markdown {
+		t.Fatalf("rewritten mutated code block content:\n%s", rewritten)
+	}
+}
+
+func TestFindStandaloneLocalImageLinesSkipsTildeFencedCodeBlock(t *testing.T) {
+	markdown := strings.Join([]string{
+		"~~~markdown",
+		"![Demo](./example.png)",
+		"~~~",
+		"",
+	}, "\n")
+
+	_, placements, err := FindStandaloneLocalImageLines(markdown)
+	if err != nil {
+		t.Fatalf("FindStandaloneLocalImageLines: %v", err)
+	}
+	if len(placements) != 0 {
+		t.Fatalf("len(placements) = %d, want 0 (image inside tilde-fenced code block should be ignored)", len(placements))
+	}
+}
+
+func TestFindStandaloneLocalImageLinesSkipsIndentedCodeBlock(t *testing.T) {
+	markdown := strings.Join([]string{
+		"before paragraph",
+		"",
+		"    ![Demo](./example.png)",
+		"",
+		"after paragraph",
+		"",
+	}, "\n")
+
+	rewritten, placements, err := FindStandaloneLocalImageLines(markdown)
+	if err != nil {
+		t.Fatalf("FindStandaloneLocalImageLines: %v", err)
+	}
+	if len(placements) != 0 {
+		t.Fatalf("len(placements) = %d, want 0 (image inside indented code block should be ignored)", len(placements))
+	}
+	if rewritten != markdown {
+		t.Fatalf("rewritten mutated indented code block:\n%s", rewritten)
+	}
+}
+
+func TestFindStandaloneLocalImageLinesTreatsImageOutsideFenceAsStandalone(t *testing.T) {
+	markdown := strings.Join([]string{
+		"```",
+		"fenced example",
+		"```",
+		"",
+		"![Real](./diagram.png)",
+		"",
+	}, "\n")
+
+	rewritten, placements, err := FindStandaloneLocalImageLines(markdown)
+	if err != nil {
+		t.Fatalf("FindStandaloneLocalImageLines: %v", err)
+	}
+	if len(placements) != 1 {
+		t.Fatalf("len(placements) = %d, want 1", len(placements))
+	}
+	if strings.Contains(rewritten, "./diagram.png") {
+		t.Fatalf("rewritten should have replaced post-fence image line with a placeholder: %q", rewritten)
+	}
+}

@@ -18,8 +18,6 @@ type LocalImagePlacement struct {
 	Placeholder string
 }
 
-var markdownImageRE = regexp.MustCompile(`!\[([^\]]*)\]\(([^)\n]+)\)`)
-var standaloneMarkdownImageRE = regexp.MustCompile(`^\s*!\[([^\]]*)\]\(([^)\n]+)\)\s*$`)
 var uriSchemeRE = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*:`)
 
 func RewriteStandaloneLocalImages(markdown, sourceFile string) (string, []LocalImagePlacement, error) {
@@ -56,35 +54,75 @@ func FindStandaloneLocalImageLines(markdown string) (string, []LocalImagePlaceme
 	return scanStandaloneLocalImages(markdown, nil)
 }
 
-// scanStandaloneLocalImages walks markdown line-by-line, rejecting inline local
-// images and replacing each standalone local image line with a placeholder.
-// When resolvePath is non-nil, it is invoked for every local destination and
-// its returned path is stored on the placement's Resolved field; a non-nil
-// error from resolvePath aborts the scan. When resolvePath is nil, placements
-// are recorded without a Resolved path.
+// scanStandaloneLocalImages walks markdown line-by-line, skipping fenced and
+// indented code blocks, rejecting inline local images, and replacing each
+// standalone local image line with a placeholder. When resolvePath is non-nil,
+// it is invoked for every local destination and its returned path is stored on
+// the placement's Resolved field; a non-nil error from resolvePath aborts the
+// scan. When resolvePath is nil, placements are recorded without a Resolved
+// path.
 func scanStandaloneLocalImages(markdown string, resolvePath func(dest string) (string, error)) (string, []LocalImagePlacement, error) {
 	normalizedMarkdown := strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(markdown)
 	lines := strings.Split(normalizedMarkdown, "\n")
 	placements := make([]LocalImagePlacement, 0)
+
+	var inFence bool
+	var fenceChar byte
+	var fenceLen int
+	var inIndented bool
+	prevBlank := true
+
 	for i, line := range lines {
-		matches := markdownImageRE.FindAllStringSubmatch(line, -1)
-		if len(matches) == 0 {
+		isBlank := strings.TrimSpace(line) == ""
+
+		if inFence {
+			if closesFencedCodeBlock(line, fenceChar, fenceLen) {
+				inFence = false
+			}
+			prevBlank = isBlank
+			continue
+		}
+		if c, n := opensFencedCodeBlock(line); n > 0 {
+			inFence = true
+			fenceChar = c
+			fenceLen = n
+			prevBlank = false
 			continue
 		}
 
-		standalone := standaloneMarkdownImageRE.FindStringSubmatch(line)
-		if standalone == nil {
-			for _, match := range matches {
-				dest, ok := parseMarkdownDestination(match[2])
+		if inIndented {
+			if isBlank || startsWithCodeIndent(line) {
+				prevBlank = isBlank
+				continue
+			}
+			inIndented = false
+		} else if prevBlank && !isBlank && startsWithCodeIndent(line) {
+			inIndented = true
+			prevBlank = false
+			continue
+		}
+
+		matches := findMarkdownImages(line)
+		if len(matches) == 0 {
+			prevBlank = isBlank
+			continue
+		}
+
+		if !isStandaloneImageLine(line, matches) {
+			for _, m := range matches {
+				dest, ok := parseMarkdownDestination(m.dest)
 				if ok && isLocalDestination(dest) {
 					return "", nil, fmt.Errorf("unsupported local image syntax on line %d: local images must appear on their own line", i+1)
 				}
 			}
+			prevBlank = isBlank
 			continue
 		}
 
-		dest, ok := parseMarkdownDestination(standalone[2])
+		m := matches[0]
+		dest, ok := parseMarkdownDestination(m.dest)
 		if !ok || !isLocalDestination(dest) {
+			prevBlank = isBlank
 			continue
 		}
 
@@ -100,14 +138,199 @@ func scanStandaloneLocalImages(markdown string, resolvePath func(dest string) (s
 		placeholder := "NOTION_CLI_LOCAL_IMAGE_" + strings.ReplaceAll(uuid.NewString(), "-", "_")
 		lines[i] = placeholder
 		placements = append(placements, LocalImagePlacement{
-			Alt:         standalone[1],
+			Alt:         m.alt,
 			Original:    dest,
 			Resolved:    resolvedPath,
 			Placeholder: placeholder,
 		})
+		prevBlank = false
 	}
 
 	return strings.Join(lines, "\n"), placements, nil
+}
+
+type markdownImageMatch struct {
+	start int
+	end   int
+	alt   string
+	dest  string
+}
+
+// findMarkdownImages returns every `![alt](dest)` span on a single line.
+// Destinations may contain balanced parentheses and `\)` / `\(` escapes, and
+// may optionally be wrapped in angle brackets (`<dest>`). The returned `dest`
+// is the raw text between the opening `(` and the matching `)`, preserving
+// escapes for parseMarkdownDestination to normalize.
+func findMarkdownImages(line string) []markdownImageMatch {
+	var matches []markdownImageMatch
+	for i := 0; i < len(line); {
+		if line[i] != '!' || i+1 >= len(line) || line[i+1] != '[' {
+			i++
+			continue
+		}
+		altStart := i + 2
+		altEnd, ok := findLinkTextEnd(line, altStart)
+		if !ok {
+			i = altStart
+			continue
+		}
+		if altEnd+1 >= len(line) || line[altEnd+1] != '(' {
+			i = altEnd + 1
+			continue
+		}
+		destStart := altEnd + 2
+		destEnd, ok := findDestinationEnd(line, destStart)
+		if !ok {
+			i = altEnd + 1
+			continue
+		}
+		matches = append(matches, markdownImageMatch{
+			start: i,
+			end:   destEnd + 1,
+			alt:   line[altStart:altEnd],
+			dest:  line[destStart:destEnd],
+		})
+		i = destEnd + 1
+	}
+	return matches
+}
+
+// findLinkTextEnd walks `line` from `start` and returns the offset of the
+// unescaped `]` that closes the link text, honoring `\]` escapes.
+func findLinkTextEnd(line string, start int) (int, bool) {
+	for i := start; i < len(line); i++ {
+		c := line[i]
+		if c == '\\' && i+1 < len(line) {
+			i++
+			continue
+		}
+		if c == ']' {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+// findDestinationEnd returns the offset of the `)` that closes a markdown
+// destination starting at `start`. Balanced parens and `\(` / `\)` escapes
+// inside the destination are preserved; angle-bracketed destinations end at
+// the first unescaped `>` followed immediately by `)`.
+func findDestinationEnd(line string, start int) (int, bool) {
+	if start < len(line) && line[start] == '<' {
+		for i := start + 1; i < len(line); i++ {
+			c := line[i]
+			if c == '\\' && i+1 < len(line) {
+				i++
+				continue
+			}
+			if c == '>' {
+				if i+1 < len(line) && line[i+1] == ')' {
+					return i + 1, true
+				}
+				return 0, false
+			}
+		}
+		return 0, false
+	}
+	depth := 0
+	for i := start; i < len(line); i++ {
+		c := line[i]
+		switch c {
+		case '\\':
+			if i+1 < len(line) {
+				i++
+				continue
+			}
+		case '(':
+			depth++
+		case ')':
+			if depth == 0 {
+				return i, true
+			}
+			depth--
+		}
+	}
+	return 0, false
+}
+
+// isStandaloneImageLine reports whether `line` contains exactly one image and
+// no other non-whitespace content.
+func isStandaloneImageLine(line string, matches []markdownImageMatch) bool {
+	if len(matches) != 1 {
+		return false
+	}
+	m := matches[0]
+	return strings.TrimSpace(line[:m.start]) == "" && strings.TrimSpace(line[m.end:]) == ""
+}
+
+// opensFencedCodeBlock reports whether `line` opens a CommonMark fenced code
+// block. It returns the fence character (`` ` `` or `~`) and the fence length
+// (>= 3) on a match, and (0, 0) otherwise.
+func opensFencedCodeBlock(line string) (byte, int) {
+	i := 0
+	for i < len(line) && i < 4 && line[i] == ' ' {
+		i++
+	}
+	if i >= 4 || i >= len(line) {
+		return 0, 0
+	}
+	c := line[i]
+	if c != '`' && c != '~' {
+		return 0, 0
+	}
+	n := 0
+	for i < len(line) && line[i] == c {
+		i++
+		n++
+	}
+	if n < 3 {
+		return 0, 0
+	}
+	// Backtick info strings may not contain additional backticks.
+	if c == '`' && strings.ContainsRune(line[i:], '`') {
+		return 0, 0
+	}
+	return c, n
+}
+
+// closesFencedCodeBlock reports whether `line` closes a fenced code block that
+// was opened with `openChar` repeated `openLen` times. A closing fence must be
+// the same character, at least as long as the opener, indented no more than 3
+// spaces, and followed only by whitespace.
+func closesFencedCodeBlock(line string, openChar byte, openLen int) bool {
+	i := 0
+	for i < len(line) && i < 4 && line[i] == ' ' {
+		i++
+	}
+	if i >= 4 || i >= len(line) || line[i] != openChar {
+		return false
+	}
+	n := 0
+	for i < len(line) && line[i] == openChar {
+		i++
+		n++
+	}
+	if n < openLen {
+		return false
+	}
+	for ; i < len(line); i++ {
+		if line[i] != ' ' && line[i] != '\t' {
+			return false
+		}
+	}
+	return true
+}
+
+// startsWithCodeIndent reports whether `line` begins with an indented-code
+// indentation (a tab or four spaces).
+func startsWithCodeIndent(line string) bool {
+	if strings.HasPrefix(line, "\t") {
+		return true
+	}
+	if len(line) >= 4 && line[:4] == "    " {
+		return true
+	}
+	return false
 }
 
 func parseMarkdownDestination(raw string) (string, bool) {
@@ -119,7 +342,7 @@ func parseMarkdownDestination(raw string) (string, bool) {
 	if strings.HasPrefix(s, "<") {
 		end := strings.Index(s, ">")
 		if end > 1 {
-			return s[1:end], true
+			return unescapeMarkdownPunctuation(s[1:end]), true
 		}
 	}
 
@@ -143,7 +366,35 @@ func parseMarkdownDestination(raw string) (string, bool) {
 	if s == "" {
 		return "", false
 	}
-	return s, true
+	return unescapeMarkdownPunctuation(s), true
+}
+
+// unescapeMarkdownPunctuation turns CommonMark backslash escapes of ASCII
+// punctuation (e.g. `\)`, `\(`, `\\`) into their literal characters.
+func unescapeMarkdownPunctuation(s string) string {
+	if !strings.Contains(s, `\`) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) && isASCIIPunctuation(s[i+1]) {
+			b.WriteByte(s[i+1])
+			i++
+			continue
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+func isASCIIPunctuation(b byte) bool {
+	switch b {
+	case '!', '"', '#', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '-', '.', '/',
+		':', ';', '<', '=', '>', '?', '@', '[', '\\', ']', '^', '_', '`', '{', '|', '}', '~':
+		return true
+	}
+	return false
 }
 
 func isLocalDestination(dest string) bool {
