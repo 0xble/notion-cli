@@ -314,6 +314,14 @@ func findDestinationEnd(line string, start int) (int, bool) {
 				return i, true
 			}
 			depth--
+		case ' ', '\t':
+			// Whitespace at depth 0 terminates a non-angle destination; the
+			// rest is an optional quoted title, then the closing `)`. Skip
+			// through the title so a `)` inside it doesn't look like the end
+			// of the image span.
+			if depth == 0 {
+				return skipOptionalTitleAndClose(line, i)
+			}
 		}
 	}
 	return 0, false
@@ -496,7 +504,11 @@ func parseMarkdownDestination(raw string) (string, bool) {
 }
 
 // unescapeMarkdownPunctuation turns CommonMark backslash escapes of ASCII
-// punctuation (e.g. `\)`, `\(`, `\\`) into their literal characters.
+// punctuation (e.g. `\)`, `\(`, `\\`) into their literal characters. It also
+// decodes `\<space>` because the destination scanner treats a backslash as
+// an escape across whitespace so users can embed spaces in unbracketed paths
+// like `./diagram\ 1.png`; if we left the backslash in place, the resolved
+// path would not match the real filename.
 func unescapeMarkdownPunctuation(s string) string {
 	if !strings.Contains(s, `\`) {
 		return s
@@ -504,7 +516,7 @@ func unescapeMarkdownPunctuation(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
 	for i := 0; i < len(s); i++ {
-		if s[i] == '\\' && i+1 < len(s) && isASCIIPunctuation(s[i+1]) {
+		if s[i] == '\\' && i+1 < len(s) && (isASCIIPunctuation(s[i+1]) || s[i+1] == ' ') {
 			b.WriteByte(s[i+1])
 			i++
 			continue

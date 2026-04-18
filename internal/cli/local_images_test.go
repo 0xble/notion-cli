@@ -391,6 +391,50 @@ func TestFindStandaloneLocalImageLinesTreatsImageOutsideFenceAsStandalone(t *tes
 	}
 }
 
+func TestRewriteStandaloneLocalImagesDecodesEscapedSpaceInDestination(t *testing.T) {
+	tmp := t.TempDir()
+	doc := filepath.Join(tmp, "doc.md")
+	img := filepath.Join(tmp, "diagram 1.png")
+	if err := os.WriteFile(img, []byte("PNG"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	rewritten, placements, err := RewriteStandaloneLocalImages(`![Alt](./diagram\ 1.png)`+"\n", doc)
+	if err != nil {
+		t.Fatalf("RewriteStandaloneLocalImages: %v", err)
+	}
+	if len(placements) != 1 {
+		t.Fatalf("len(placements) = %d, want 1", len(placements))
+	}
+	if placements[0].Resolved != img {
+		t.Fatalf("Resolved = %q, want %q", placements[0].Resolved, img)
+	}
+	if strings.Contains(rewritten, `diagram\ 1.png`) {
+		t.Fatalf("rewritten still contains escaped destination: %q", rewritten)
+	}
+}
+
+func TestRewriteStandaloneLocalImagesHandlesParenInTitle(t *testing.T) {
+	tmp := t.TempDir()
+	doc := filepath.Join(tmp, "doc.md")
+	img := filepath.Join(tmp, "img.png")
+	if err := os.WriteFile(img, []byte("PNG"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// The `)` inside the title must not terminate the image span.
+	rewritten, placements, err := RewriteStandaloneLocalImages(`![Alt](./img.png "v1) draft")`+"\n", doc)
+	if err != nil {
+		t.Fatalf("RewriteStandaloneLocalImages: %v", err)
+	}
+	if len(placements) != 1 {
+		t.Fatalf("len(placements) = %d, want 1; rewritten=%q", len(placements), rewritten)
+	}
+	if placements[0].Resolved != img {
+		t.Fatalf("Resolved = %q, want %q", placements[0].Resolved, img)
+	}
+}
+
 func TestIsLocalDestinationHandlesWindowsAndURISchemes(t *testing.T) {
 	cases := []struct {
 		name string
