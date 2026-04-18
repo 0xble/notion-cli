@@ -273,7 +273,6 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string, ski
 
 	markdown := string(content)
 	bgCtx := context.Background()
-	var localUploads []uploadedLocalImage
 	if skipLocalImages {
 		markdown, err = stripLocalImages(markdown)
 		if err != nil {
@@ -285,22 +284,6 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string, ski
 			output.PrintError(err)
 			return err
 		}
-		markdown, localUploads, err = prepareLocalImageUploads(ctx, bgCtx, file, markdown)
-		if err != nil {
-			output.PrintError(err)
-			return err
-		}
-	}
-
-	if title == "" {
-		title = extractTitleFromMarkdown(markdown)
-	}
-	if title == "" {
-		title = strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
-	}
-
-	if icon == "" {
-		icon, title = extractEmojiFromTitle(title)
 	}
 
 	client, err := cli.RequireClient()
@@ -309,11 +292,9 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string, ski
 	}
 	defer func() { _ = client.Close() }()
 
-	req := mcp.CreatePageRequest{
-		Title:   title,
-		Content: markdown,
-	}
-
+	// Resolve parent IDs before any upload side effects so an invalid
+	// --parent/--parent-db doesn't leave orphaned file uploads behind.
+	req := mcp.CreatePageRequest{}
 	if parentDB != "" {
 		dbID, err := cli.ResolveDatabaseID(bgCtx, client, parentDB)
 		if err != nil {
@@ -334,6 +315,29 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string, ski
 		}
 		req.ParentPageID = parentID
 	}
+
+	var localUploads []uploadedLocalImage
+	if !skipLocalImages {
+		markdown, localUploads, err = prepareLocalImageUploads(ctx, bgCtx, file, markdown)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+	}
+
+	if title == "" {
+		title = extractTitleFromMarkdown(markdown)
+	}
+	if title == "" {
+		title = strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
+	}
+
+	if icon == "" {
+		icon, title = extractEmojiFromTitle(title)
+	}
+
+	req.Title = title
+	req.Content = markdown
 
 	resp, err := client.CreatePage(bgCtx, req)
 	if err != nil {
@@ -563,6 +567,7 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 	bgCtx := context.Background()
 	var localUploads []uploadedLocalImage
 	var snapshot *api.PageMarkdown
+	var resolvedParentPageID, resolvedParentDatabaseID string
 	if skipLocalImages {
 		body, err = stripLocalImages(body)
 		if err != nil {
@@ -609,6 +614,39 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 				output.PrintError(finalErr)
 				return finalErr
 			}
+		}
+
+		// For the create path, resolve parent IDs before any uploads so an
+		// invalid --parent/--parent-db doesn't leave orphaned file uploads.
+		if hasLocalImages && fm.NotionID == "" {
+			resolveClient, err := cli.RequireClient()
+			if err != nil {
+				return err
+			}
+			if parentDB != "" {
+				dbID, err := cli.ResolveDatabaseID(bgCtx, resolveClient, parentDB)
+				if err != nil {
+					_ = resolveClient.Close()
+					output.PrintError(err)
+					return err
+				}
+				dbID, err = resolveClient.ResolveDataSourceID(bgCtx, dbID)
+				if err != nil {
+					_ = resolveClient.Close()
+					output.PrintError(err)
+					return err
+				}
+				resolvedParentDatabaseID = dbID
+			} else if parent != "" {
+				parentID, err := cli.ResolvePageID(bgCtx, resolveClient, parent)
+				if err != nil {
+					_ = resolveClient.Close()
+					output.PrintError(err)
+					return err
+				}
+				resolvedParentPageID = parentID
+			}
+			_ = resolveClient.Close()
 		}
 
 		body, localUploads, err = prepareLocalImageUploads(ctx, bgCtx, file, body)
@@ -677,7 +715,13 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 		Content: body,
 	}
 
-	if parentDB != "" {
+	// Reuse parent IDs pre-resolved above when local images were involved;
+	// otherwise resolve here for the no-upload create path.
+	if resolvedParentDatabaseID != "" {
+		req.ParentDatabaseID = resolvedParentDatabaseID
+	} else if resolvedParentPageID != "" {
+		req.ParentPageID = resolvedParentPageID
+	} else if parentDB != "" {
 		dbID, err := cli.ResolveDatabaseID(bgCtx, client, parentDB)
 		if err != nil {
 			output.PrintError(err)
