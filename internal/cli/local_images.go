@@ -455,9 +455,20 @@ func parseMarkdownDestination(raw string) (string, bool) {
 	}
 
 	if strings.HasPrefix(s, "<") {
-		end := strings.Index(s, ">")
-		if end > 1 {
-			return unescapeMarkdownPunctuation(s[1:end]), true
+		// Match the scanner's findDestinationEnd: walk past `\>` escapes
+		// so inputs like `<./foo\>bar.png>` keep the full destination
+		// instead of truncating at the first `>`.
+		for i := 1; i < len(s); i++ {
+			if s[i] == '\\' && i+1 < len(s) {
+				i++
+				continue
+			}
+			if s[i] == '>' {
+				if i > 1 {
+					return unescapeMarkdownPunctuation(s[1:i]), true
+				}
+				break
+			}
 		}
 	}
 

@@ -331,6 +331,30 @@ func TestRewriteStandaloneLocalImagesSupportsAngleBracketDestinationWithTitle(t 
 	}
 }
 
+func TestRewriteStandaloneLocalImagesHandlesEscapedGTInAngleBrackets(t *testing.T) {
+	tmp := t.TempDir()
+	doc := filepath.Join(tmp, "doc.md")
+	img := filepath.Join(tmp, "foo>bar.png")
+	if err := os.WriteFile(img, []byte("PNG"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// CommonMark allows `\>` inside angle-bracket destinations.
+	rewritten, placements, err := RewriteStandaloneLocalImages(`![Alt](<./foo\>bar.png>)`+"\n", doc)
+	if err != nil {
+		t.Fatalf("RewriteStandaloneLocalImages: %v", err)
+	}
+	if len(placements) != 1 {
+		t.Fatalf("len(placements) = %d, want 1", len(placements))
+	}
+	if placements[0].Resolved != img {
+		t.Fatalf("Resolved = %q, want %q", placements[0].Resolved, img)
+	}
+	if strings.Contains(rewritten, `foo\>bar.png`) {
+		t.Fatalf("rewritten should have replaced image line, got %q", rewritten)
+	}
+}
+
 func TestFindStandaloneLocalImageLinesIgnoresEscapedImageMarker(t *testing.T) {
 	input := `\![Demo](./example.png)` + "\n"
 	rewritten, placements, err := FindStandaloneLocalImageLines(input)
