@@ -518,10 +518,6 @@ func isLocalDestination(dest string) bool {
 		return false
 	}
 
-	if len(d) >= 2 && d[1] == ':' {
-		return true
-	}
-
 	lower := strings.ToLower(d)
 	switch {
 	case strings.HasPrefix(lower, "#"),
@@ -536,7 +532,24 @@ func isLocalDestination(dest string) bool {
 		return true
 	}
 
+	// Windows drive paths like `C:`, `C:\foo`, or `C:/foo`. Require the
+	// leading character to be an ASCII letter and the character after the
+	// colon to be a separator (or end-of-string) so one-letter URI schemes
+	// such as `a:foo` fall through to the scheme check below instead of
+	// being misclassified as filesystem paths. Exclude `x://...` because
+	// that is a URI with authority, not a Windows drive path.
+	if len(d) >= 2 && isASCIILetter(d[0]) && d[1] == ':' {
+		hasAuthority := len(d) >= 4 && d[2] == '/' && d[3] == '/'
+		if !hasAuthority && (len(d) == 2 || d[2] == '\\' || d[2] == '/') {
+			return true
+		}
+	}
+
 	return !uriSchemeRE.MatchString(d)
+}
+
+func isASCIILetter(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
 }
 
 func resolveLocalPath(dest, sourceDir string) (string, error) {

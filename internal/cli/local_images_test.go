@@ -366,3 +366,29 @@ func TestFindStandaloneLocalImageLinesTreatsImageOutsideFenceAsStandalone(t *tes
 		t.Fatalf("rewritten should have replaced post-fence image line with a placeholder: %q", rewritten)
 	}
 }
+
+func TestIsLocalDestinationHandlesWindowsAndURISchemes(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{"windows drive only", `C:`, true},
+		{"windows backslash path", `C:\Users\foo\img.png`, true},
+		{"windows forward-slash path", `C:/Users/foo/img.png`, true},
+		{"lowercase drive", `d:\tmp\img.png`, true},
+		{"single-letter URI scheme", `a://example.com/img.png`, false},
+		{"single-letter URI no authority", `a:example`, false},
+		{"non-letter colon prefix", `::foo`, true},
+		{"digit colon prefix", `1:relative`, true},
+		{"empty string", ``, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := isLocalDestination(tc.in)
+			if got != tc.want {
+				t.Fatalf("isLocalDestination(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
