@@ -435,6 +435,50 @@ func TestRewriteStandaloneLocalImagesHandlesParenInTitle(t *testing.T) {
 	}
 }
 
+func TestFindStandaloneLocalImageLinesIgnoresQuotedFencedCodeBlock(t *testing.T) {
+	// Image syntax inside a quoted fenced code block must not be
+	// scanned; it's documentation, not an upload target.
+	markdown := strings.Join([]string{
+		"> ```md",
+		"> ![Demo](./img.png)",
+		"> ```",
+		"",
+		"![Real](./real.png)",
+		"",
+	}, "\n")
+
+	rewritten, placements, err := FindStandaloneLocalImageLines(markdown)
+	if err != nil {
+		t.Fatalf("FindStandaloneLocalImageLines: %v", err)
+	}
+	if len(placements) != 1 {
+		t.Fatalf("len(placements) = %d, want 1 (quoted fence contents should be ignored)", len(placements))
+	}
+	if !strings.Contains(rewritten, "> ![Demo](./img.png)") {
+		t.Fatalf("rewritten lost the quoted example: %q", rewritten)
+	}
+	if strings.Contains(rewritten, "./real.png") {
+		t.Fatalf("rewritten should have replaced the real image line: %q", rewritten)
+	}
+}
+
+func TestFindStandaloneLocalImageLinesIgnoresBlockquotedImage(t *testing.T) {
+	// A blockquoted image line isn't standalone; the `>` marker means
+	// the user is documenting rather than uploading.
+	markdown := "> ![Quoted](./quoted.png)\n"
+
+	rewritten, placements, err := FindStandaloneLocalImageLines(markdown)
+	if err != nil {
+		t.Fatalf("FindStandaloneLocalImageLines: %v", err)
+	}
+	if len(placements) != 0 {
+		t.Fatalf("len(placements) = %d, want 0 (blockquoted image should be ignored)", len(placements))
+	}
+	if rewritten != markdown {
+		t.Fatalf("rewritten = %q, want input unchanged", rewritten)
+	}
+}
+
 func TestIsLocalDestinationHandlesWindowsAndURISchemes(t *testing.T) {
 	cases := []struct {
 		name string

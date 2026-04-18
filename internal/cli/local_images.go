@@ -89,6 +89,17 @@ func scanStandaloneLocalImages(markdown string, resolvePath func(dest string) (s
 			prevBlank = false
 			continue
 		}
+		// Blockquotes typically hold documentation, examples, or quoted
+		// code including fenced blocks with literal `![...](...)` samples.
+		// The fence detector above ignores `>`-prefixed lines, so any
+		// image syntax inside a quoted fence would otherwise be scanned
+		// as a real local image and either uploaded by mistake or hit
+		// the "must appear on their own line" error path. Treat the
+		// whole blockquote line as opaque to image scanning.
+		if isBlockquoteLine(line) {
+			prevBlank = isBlank
+			continue
+		}
 
 		if inIndented {
 			if isBlank || startsWithCodeIndent(line) {
@@ -384,6 +395,16 @@ func isStandaloneImageLine(line string, matches []markdownImageMatch) bool {
 	}
 	m := matches[0]
 	return strings.TrimSpace(line[:m.start]) == "" && strings.TrimSpace(line[m.end:]) == ""
+}
+
+// isBlockquoteLine reports whether `line` opens or continues a CommonMark
+// blockquote (a `>` optionally preceded by up to three spaces of indent).
+func isBlockquoteLine(line string) bool {
+	i := 0
+	for i < len(line) && i < 4 && line[i] == ' ' {
+		i++
+	}
+	return i < len(line) && line[i] == '>'
 }
 
 // opensFencedCodeBlock reports whether `line` opens a CommonMark fenced code
