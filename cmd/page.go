@@ -281,12 +281,12 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string, ski
 			return err
 		}
 	} else {
-		markdown, localUploads, err = prepareLocalImageUploads(ctx, bgCtx, file, markdown)
-		if err != nil {
+		if err := checkLocalImageParent(markdown, parent, parentDB); err != nil {
 			output.PrintError(err)
 			return err
 		}
-		if err := requireLocalImageParent(localUploads, parent, parentDB); err != nil {
+		markdown, localUploads, err = prepareLocalImageUploads(ctx, bgCtx, file, markdown)
+		if err != nil {
 			output.PrintError(err)
 			return err
 		}
@@ -579,6 +579,12 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 			return err
 		}
 	} else {
+		if fm.NotionID == "" {
+			if err := checkLocalImageParent(body, parent, parentDB); err != nil {
+				output.PrintError(err)
+				return err
+			}
+		}
 		body, localUploads, err = prepareLocalImageUploads(ctx, bgCtx, file, body)
 		if err != nil {
 			output.PrintError(err)
@@ -652,13 +658,6 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 
 		output.PrintSuccess("Synced: " + displayTitle)
 		return nil
-	}
-
-	if !skipLocalImages {
-		if err := requireLocalImageParent(localUploads, parent, parentDB); err != nil {
-			output.PrintError(err)
-			return err
-		}
 	}
 
 	req := mcp.CreatePageRequest{

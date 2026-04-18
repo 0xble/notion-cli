@@ -83,8 +83,16 @@ func stripLocalImages(markdown string) (string, error) {
 	return strings.Join(lines, "\n"), nil
 }
 
-func requireLocalImageParent(uploads []uploadedLocalImage, parent, parentDB string) error {
-	if len(uploads) == 0 {
+// checkLocalImageParent scans markdown for standalone local images without
+// performing remote uploads and returns a parent-required error when the user
+// provided neither --parent nor --parent-db. Call before prepareLocalImageUploads
+// so missing-parent failures don't leave orphaned file uploads in Notion.
+func checkLocalImageParent(markdown, parent, parentDB string) error {
+	_, placements, err := cli.FindStandaloneLocalImageLines(markdown)
+	if err != nil {
+		return err
+	}
+	if len(placements) == 0 {
 		return nil
 	}
 	if strings.TrimSpace(parent) != "" || strings.TrimSpace(parentDB) != "" {

@@ -159,22 +159,21 @@ func TestSubstituteUploadedLocalImagesSkipsWithoutUploads(t *testing.T) {
 	}
 }
 
-func TestRequireLocalImageParent(t *testing.T) {
-	uploads := []uploadedLocalImage{{
-		Placeholder: "PLACEHOLDER",
-	}}
+func TestCheckLocalImageParent(t *testing.T) {
+	const markdownWithImage = "![Diagram](./diagram.png)\n"
+	const markdownWithoutImage = "# Just text\n"
 
-	if err := requireLocalImageParent(nil, "", ""); err != nil {
-		t.Fatalf("expected nil without uploads, got %v", err)
+	if err := checkLocalImageParent(markdownWithoutImage, "", ""); err != nil {
+		t.Fatalf("expected nil without local images, got %v", err)
 	}
-	if err := requireLocalImageParent(uploads, "parent-id", ""); err != nil {
+	if err := checkLocalImageParent(markdownWithImage, "parent-id", ""); err != nil {
 		t.Fatalf("expected nil with parent, got %v", err)
 	}
-	if err := requireLocalImageParent(uploads, "", "db-id"); err != nil {
+	if err := checkLocalImageParent(markdownWithImage, "", "db-id"); err != nil {
 		t.Fatalf("expected nil with parent db, got %v", err)
 	}
 
-	err := requireLocalImageParent(uploads, "", "")
+	err := checkLocalImageParent(markdownWithImage, "", "")
 	if err == nil {
 		t.Fatal("expected error without parent or parent db")
 	}
