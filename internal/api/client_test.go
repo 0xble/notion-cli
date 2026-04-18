@@ -260,3 +260,24 @@ func TestTrashPageUsesPatch(t *testing.T) {
 		t.Fatalf("TrashPage: %v", err)
 	}
 }
+
+func TestUploadFileRejectsOversizedSinglePart(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(config.APIConfig{BaseURL: srv.URL + "/v1"}, "secret-token")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	oversize := int64(SinglePartUploadMaxBytes + 1)
+	_, err = client.UploadFile(context.Background(), "big.png", oversize, strings.NewReader(""))
+	if err == nil {
+		t.Fatalf("UploadFile returned nil error; expected size-limit error")
+	}
+	if !strings.Contains(err.Error(), "single_part upload limit") {
+		t.Fatalf("UploadFile error = %q, want single_part limit message", err.Error())
+	}
+}

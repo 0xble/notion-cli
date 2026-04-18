@@ -134,6 +134,11 @@ func (c *Client) GetPageMarkdown(ctx context.Context, pageID string) (*PageMarkd
 	return &out, nil
 }
 
+// SinglePartUploadMaxBytes is Notion's single_part file-upload size limit.
+// Files larger than this require the multi_part upload flow, which this
+// client does not yet implement.
+const SinglePartUploadMaxBytes = 20 * 1024 * 1024
+
 // UploadFile streams a file upload to the Notion API without buffering the whole
 // payload in memory. The reader is consumed through a multipart writer piped
 // directly into the HTTP request body. Pass the exact byte size so the server
@@ -145,6 +150,9 @@ func (c *Client) UploadFile(ctx context.Context, name string, size int64, body i
 	}
 	if size <= 0 {
 		return "", fmt.Errorf("file size must be positive")
+	}
+	if size > SinglePartUploadMaxBytes {
+		return "", fmt.Errorf("file %q is %d bytes; Notion's single_part upload limit is %d bytes (~20MB) and multi_part uploads are not yet supported by this client", name, size, SinglePartUploadMaxBytes)
 	}
 	if body == nil {
 		return "", fmt.Errorf("file body is required")
