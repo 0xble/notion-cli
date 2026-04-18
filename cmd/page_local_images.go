@@ -96,8 +96,11 @@ func requireLocalImageParent(uploads []uploadedLocalImage, parent, parentDB stri
 }
 
 func substituteUploadedLocalImages(cmdCtx *Context, ctx context.Context, pageID string, uploads []uploadedLocalImage) error {
-	if strings.TrimSpace(pageID) == "" || len(uploads) == 0 {
+	if len(uploads) == 0 {
 		return nil
+	}
+	if strings.TrimSpace(pageID) == "" {
+		return fmt.Errorf("cannot substitute %d local image(s): missing page ID", len(uploads))
 	}
 
 	apiClient, err := cli.RequireOfficialAPIClient(officialAPIOverrides(cmdCtx))

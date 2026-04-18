@@ -134,6 +134,31 @@ func TestSubstituteUploadedLocalImagesAppendsAfterPlaceholderAndDeletes(t *testi
 	}
 }
 
+func TestSubstituteUploadedLocalImagesErrorsWhenPageIDMissing(t *testing.T) {
+	cmdCtx := &Context{APIToken: "secret-token"}
+	uploads := []uploadedLocalImage{{
+		Alt:          "Diagram",
+		FileUploadID: "upload_123",
+		Placeholder:  "PLACEHOLDER",
+		ResolvedPath: "/tmp/diagram.png",
+	}}
+
+	err := substituteUploadedLocalImages(cmdCtx, context.Background(), "   ", uploads)
+	if err == nil {
+		t.Fatalf("expected error when pageID is empty with pending uploads")
+	}
+	if !strings.Contains(err.Error(), "missing page ID") {
+		t.Fatalf("error = %v, want missing-page-ID message", err)
+	}
+}
+
+func TestSubstituteUploadedLocalImagesSkipsWithoutUploads(t *testing.T) {
+	cmdCtx := &Context{APIToken: "secret-token"}
+	if err := substituteUploadedLocalImages(cmdCtx, context.Background(), "", nil); err != nil {
+		t.Fatalf("expected nil when no uploads, got %v", err)
+	}
+}
+
 func TestRequireLocalImageParent(t *testing.T) {
 	uploads := []uploadedLocalImage{{
 		Placeholder: "PLACEHOLDER",
