@@ -550,15 +550,24 @@ func resolveLocalPath(dest, sourceDir string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("invalid file URL path %q: %w", d, err)
 		}
-		d = unescaped
+		// Preserve the authority for UNC-style file URLs
+		// (file://server/share/path) so the resolved local path points at
+		// the right share instead of silently dropping the host.
+		if parsed.Host != "" && parsed.Host != "localhost" {
+			d = "//" + parsed.Host + unescaped
+		} else {
+			d = unescaped
+		}
 	}
 
-	if strings.HasPrefix(d, "~"+string(filepath.Separator)) {
+	// Accept both `~/` and `~\` so markdown paths written with forward
+	// slashes still expand on Windows, where filepath.Separator is `\`.
+	if strings.HasPrefix(d, "~/") || strings.HasPrefix(d, "~"+string(filepath.Separator)) {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("expand home path %q: %w", d, err)
 		}
-		d = filepath.Join(home, strings.TrimPrefix(d, "~"+string(filepath.Separator)))
+		d = filepath.Join(home, d[2:])
 	}
 
 	if !filepath.IsAbs(d) {
