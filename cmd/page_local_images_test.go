@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/lox/notion-cli/internal/api"
 )
 
 func TestPrepareLocalImageUploadsUploadsAndDeduplicates(t *testing.T) {
@@ -142,5 +144,35 @@ func TestRequireLocalImageParent(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "--parent or --parent-db") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// A nil *mcp.Client is passed on purpose: if the guard failed to short-circuit
+// on truncated snapshots, UpdatePage would dereference the nil client and panic.
+func TestRollbackSyncedPageSkipsTruncatedSnapshot(t *testing.T) {
+	snapshot := &api.PageMarkdown{
+		Markdown:  "# Title\n\nPartial content\n",
+		Truncated: true,
+	}
+
+	err := rollbackSyncedPage(context.Background(), nil, "page-id", snapshot)
+	if err == nil {
+		t.Fatalf("rollbackSyncedPage returned nil error; expected truncation error")
+	}
+	if !strings.Contains(err.Error(), "truncated") {
+		t.Fatalf("rollbackSyncedPage error = %q, want it to mention truncation", err.Error())
+	}
+}
+
+func TestRollbackSyncedPageSkipsNilSnapshot(t *testing.T) {
+	if err := rollbackSyncedPage(context.Background(), nil, "page-id", nil); err != nil {
+		t.Fatalf("rollbackSyncedPage returned %v, want nil", err)
+	}
+}
+
+func TestRollbackSyncedPageSkipsEmptyMarkdownSnapshot(t *testing.T) {
+	snapshot := &api.PageMarkdown{Markdown: "   \n"}
+	if err := rollbackSyncedPage(context.Background(), nil, "page-id", snapshot); err != nil {
+		t.Fatalf("rollbackSyncedPage returned %v, want nil", err)
 	}
 }
