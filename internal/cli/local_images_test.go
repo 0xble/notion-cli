@@ -185,7 +185,12 @@ func TestFindStandaloneLocalImageLinesIgnoresInlineCodeSpans(t *testing.T) {
 	}
 }
 
-func TestFindStandaloneLocalImageLinesPreservesLeadingIndentation(t *testing.T) {
+func TestFindStandaloneLocalImageLinesNormalizesToColumnZero(t *testing.T) {
+	// Indented standalone image lines have their leading whitespace dropped
+	// so the placeholder always lands in a paragraph block after
+	// replace_content. substituteUploadedLocalImages only indexes paragraph
+	// blocks, so keeping the indent would let Notion nest the placeholder
+	// inside the surrounding list_item/quote and break substitution.
 	input := "   ![img](./a.png)\n"
 
 	rewritten, placements, err := FindStandaloneLocalImageLines(input)
@@ -195,9 +200,9 @@ func TestFindStandaloneLocalImageLinesPreservesLeadingIndentation(t *testing.T) 
 	if len(placements) != 1 {
 		t.Fatalf("len(placements) = %d, want 1", len(placements))
 	}
-	want := "   " + placements[0].Placeholder + "\n"
+	want := placements[0].Placeholder + "\n"
 	if rewritten != want {
-		t.Fatalf("rewritten = %q, want %q", rewritten, want)
+		t.Fatalf("rewritten = %q, want %q (placeholder must sit at column 0)", rewritten, want)
 	}
 }
 

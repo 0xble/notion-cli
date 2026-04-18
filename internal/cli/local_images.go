@@ -137,10 +137,18 @@ func scanStandaloneLocalImages(markdown string, resolvePath func(dest string) (s
 		}
 
 		placeholder := "NOTION_CLI_LOCAL_IMAGE_" + strings.ReplaceAll(uuid.NewString(), "-", "_")
-		// Preserve the whitespace that surrounded the image so block context
-		// (list continuations, blockquote markers, etc.) is not dropped when
-		// the placeholder is substituted back.
-		lines[i] = line[:m.start] + placeholder + line[m.end:]
+		// Replace the entire line with the bare placeholder at column 0. We
+		// deliberately drop any surrounding whitespace so the placeholder
+		// always lands in a paragraph block after replace_content, even
+		// when the original image sat inside a list continuation or
+		// blockquote. Keeping the leading whitespace would let Notion nest
+		// the placeholder inside the enclosing block (list_item, quote,
+		// etc.), and substituteUploadedLocalImages only indexes paragraph
+		// blocks, so substitution would fail and force rollback. The
+		// tradeoff is cosmetic: uploaded images render as standalone
+		// blocks rather than nested under the list or quote they were
+		// written under.
+		lines[i] = placeholder
 		placements = append(placements, LocalImagePlacement{
 			Alt:         m.alt,
 			Original:    dest,
