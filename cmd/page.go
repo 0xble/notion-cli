@@ -562,6 +562,7 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 	fm, body := cli.ParseFrontmatter(content)
 	bgCtx := context.Background()
 	var localUploads []uploadedLocalImage
+	var snapshot *api.PageMarkdown
 	if skipLocalImages {
 		body, err = stripLocalImages(body)
 		if err != nil {
@@ -569,12 +570,42 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 			return err
 		}
 	} else {
+		// Dry-run scan so we know whether uploads will happen before anything
+		// goes over the wire. This lets us validate the parent flags and,
+		// for in-place sync, fetch the rollback snapshot (and gate on
+		// truncation) before we touch the official API.
+		_, placements, scanErr := cli.FindStandaloneLocalImageLines(body)
+		if scanErr != nil {
+			output.PrintError(scanErr)
+			return scanErr
+		}
+		hasLocalImages := len(placements) > 0
+
 		if fm.NotionID == "" {
 			if err := checkLocalImageParent(body, parent, parentDB); err != nil {
 				output.PrintError(err)
 				return err
 			}
 		}
+
+		if hasLocalImages && fm.NotionID != "" {
+			apiClient, err := cli.RequireOfficialAPIClient(officialAPIOverrides(ctx))
+			if err != nil {
+				output.PrintError(err)
+				return err
+			}
+			snapshot, err = apiClient.GetPageMarkdown(bgCtx, fm.NotionID)
+			if err != nil {
+				output.PrintError(err)
+				return err
+			}
+			if snapshot.Truncated {
+				finalErr := fmt.Errorf("cannot sync local images safely: page %s markdown snapshot is truncated, so rollback on a failed substitution would leave placeholders in the page. Retry without local images or reduce the page before syncing", fm.NotionID)
+				output.PrintError(finalErr)
+				return finalErr
+			}
+		}
+
 		body, localUploads, err = prepareLocalImageUploads(ctx, bgCtx, file, body)
 		if err != nil {
 			output.PrintError(err)
@@ -599,20 +630,6 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 	defer func() { _ = client.Close() }()
 
 	if fm.NotionID != "" {
-		var snapshot *api.PageMarkdown
-		if len(localUploads) > 0 {
-			apiClient, err := cli.RequireOfficialAPIClient(officialAPIOverrides(ctx))
-			if err != nil {
-				output.PrintError(err)
-				return err
-			}
-			snapshot, err = apiClient.GetPageMarkdown(bgCtx, fm.NotionID)
-			if err != nil {
-				output.PrintError(err)
-				return err
-			}
-		}
-
 		req := mcp.UpdatePageRequest{
 			PageID:     fm.NotionID,
 			Command:    "replace_content",

@@ -102,7 +102,8 @@ func scanStandaloneLocalImages(markdown string, resolvePath func(dest string) (s
 			continue
 		}
 
-		matches := findMarkdownImages(line)
+		scanLine := maskInlineCodeSpans(line)
+		matches := findMarkdownImages(scanLine)
 		if len(matches) == 0 {
 			prevBlank = isBlank
 			continue
@@ -136,7 +137,10 @@ func scanStandaloneLocalImages(markdown string, resolvePath func(dest string) (s
 		}
 
 		placeholder := "NOTION_CLI_LOCAL_IMAGE_" + strings.ReplaceAll(uuid.NewString(), "-", "_")
-		lines[i] = placeholder
+		// Preserve the whitespace that surrounded the image so block context
+		// (list continuations, blockquote markers, etc.) is not dropped when
+		// the placeholder is substituted back.
+		lines[i] = line[:m.start] + placeholder + line[m.end:]
 		placements = append(placements, LocalImagePlacement{
 			Alt:         m.alt,
 			Original:    dest,
@@ -154,6 +158,47 @@ type markdownImageMatch struct {
 	end   int
 	alt   string
 	dest  string
+}
+
+// maskInlineCodeSpans replaces the contents of every inline code span in
+// `line` with spaces so the image scanner does not pick up markdown tokens
+// inside the span. Length is preserved so match offsets still map back to
+// the original line. An opening run of N backticks closes on the first
+// matching run of exactly N backticks (CommonMark rule). Backticks inside
+// a span cannot be escaped.
+func maskInlineCodeSpans(line string) string {
+	b := []byte(line)
+	i := 0
+	for i < len(b) {
+		if b[i] != '`' {
+			i++
+			continue
+		}
+		runStart := i
+		for i < len(b) && b[i] == '`' {
+			i++
+		}
+		runLen := i - runStart
+		for i < len(b) {
+			if b[i] != '`' {
+				i++
+				continue
+			}
+			closeStart := i
+			for i < len(b) && b[i] == '`' {
+				i++
+			}
+			if i-closeStart == runLen {
+				for k := runStart + runLen; k < closeStart; k++ {
+					if b[k] != '\n' {
+						b[k] = ' '
+					}
+				}
+				break
+			}
+		}
+	}
+	return string(b)
 }
 
 // findMarkdownImages returns every `![alt](dest)` span on a single line.

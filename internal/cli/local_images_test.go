@@ -170,6 +170,37 @@ func TestRewriteStandaloneLocalImagesSupportsEscapedParensInDestination(t *testi
 	}
 }
 
+func TestFindStandaloneLocalImageLinesIgnoresInlineCodeSpans(t *testing.T) {
+	input := "Use `![Demo](./example.png)` in docs.\n"
+
+	rewritten, placements, err := FindStandaloneLocalImageLines(input)
+	if err != nil {
+		t.Fatalf("FindStandaloneLocalImageLines: %v", err)
+	}
+	if len(placements) != 0 {
+		t.Fatalf("len(placements) = %d, want 0 (image inside inline code span should be ignored)", len(placements))
+	}
+	if rewritten != input {
+		t.Fatalf("rewritten = %q, want input unchanged", rewritten)
+	}
+}
+
+func TestFindStandaloneLocalImageLinesPreservesLeadingIndentation(t *testing.T) {
+	input := "   ![img](./a.png)\n"
+
+	rewritten, placements, err := FindStandaloneLocalImageLines(input)
+	if err != nil {
+		t.Fatalf("FindStandaloneLocalImageLines: %v", err)
+	}
+	if len(placements) != 1 {
+		t.Fatalf("len(placements) = %d, want 1", len(placements))
+	}
+	want := "   " + placements[0].Placeholder + "\n"
+	if rewritten != want {
+		t.Fatalf("rewritten = %q, want %q", rewritten, want)
+	}
+}
+
 func TestFindStandaloneLocalImageLinesSkipsBacktickFencedCodeBlock(t *testing.T) {
 	markdown := strings.Join([]string{
 		"before",
