@@ -11,6 +11,11 @@ import (
 const (
 	configDirName  = ".config/notion-cli"
 	configFileName = "config.json"
+
+	// DefaultAPIBaseURL is the default Notion REST API base URL.
+	DefaultAPIBaseURL = "https://api.notion.com/v1"
+	// DefaultNotionAPIVersion is the default Notion-Version header value.
+	DefaultNotionAPIVersion = "2022-06-28"
 )
 
 type Config struct {
@@ -27,8 +32,8 @@ type APIConfig struct {
 func Default() Config {
 	return Config{
 		API: APIConfig{
-			BaseURL:       "https://api.notion.com/v1",
-			NotionVersion: "2022-06-28",
+			BaseURL:       DefaultAPIBaseURL,
+			NotionVersion: DefaultNotionAPIVersion,
 		},
 	}
 }
@@ -83,14 +88,16 @@ func normalize(cfg *Config) {
 		return
 	}
 
+	d := Default()
+
 	cfg.API.BaseURL = strings.TrimSpace(cfg.API.BaseURL)
 	if cfg.API.BaseURL == "" {
-		cfg.API.BaseURL = "https://api.notion.com/v1"
+		cfg.API.BaseURL = d.API.BaseURL
 	}
 	cfg.API.BaseURL = strings.TrimRight(cfg.API.BaseURL, "/")
 	cfg.API.NotionVersion = strings.TrimSpace(cfg.API.NotionVersion)
 	if cfg.API.NotionVersion == "" {
-		cfg.API.NotionVersion = "2022-06-28"
+		cfg.API.NotionVersion = d.API.NotionVersion
 	}
 	cfg.API.Token = strings.TrimSpace(cfg.API.Token)
 }
