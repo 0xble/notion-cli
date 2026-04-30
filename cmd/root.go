@@ -1,5 +1,7 @@
 package cmd
 
+import "github.com/lox/notion-cli/internal/config"
+
 type Context struct {
 	Profile          string
 	JSON             bool
@@ -32,4 +34,16 @@ type VersionCmd struct {
 func (c *VersionCmd) Run(ctx *Context) error {
 	println("notion-cli version " + c.Version)
 	return nil
+}
+
+func officialAPIOverrides(ctx *Context) config.APIOverrides {
+	if ctx == nil {
+		return config.APIOverrides{}
+	}
+	return config.APIOverrides{
+		Profile:       ctx.Profile,
+		BaseURL:       ctx.APIBaseURL,
+		NotionVersion: ctx.APINotionVersion,
+		Token:         ctx.APIToken,
+	}
 }

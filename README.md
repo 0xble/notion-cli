@@ -74,7 +74,7 @@ notion-cli --profile work auth login
 notion-cli --profile work auth api setup
 
 # Official API fallback auth for features MCP cannot handle directly
-notion-cli auth api setup     # Opens the internal integrations page, then prompts for token
+notion-cli auth api setup     # Opens the internal integrations page, prompts for token, warns if format looks wrong
 notion-cli auth api status
 notion-cli auth api verify
 notion-cli auth api unset
@@ -95,6 +95,7 @@ notion-cli page view <page> --json             # Output as JSON
 notion-cli page create --title "Title"         # Create a page
 notion-cli page create --title "T" --content "Body text"
 notion-cli page create --title "T" --parent <page-id>
+notion-cli page archive <page-url-or-id>       # Archive a page via the official API
 
 # Upload a markdown file as a new page
 notion-cli page upload ./document.md                        # Title from # heading or filename
@@ -103,6 +104,7 @@ notion-cli page upload ./document.md --parent "Engineering" # Parent by name or 
 notion-cli page upload ./document.md --parent-db <db-id>    # Upload as database entry
 notion-cli page upload ./document.md --icon "📄"             # Set emoji icon
 notion-cli page upload ./document.md                        # Uploads standalone local images when configured
+notion-cli page upload ./document.md --skip-local-images    # Strips standalone local image lines instead
 
 # Sync a markdown file (create or update)
 notion-cli page sync ./document.md                          # Creates page, writes notion-id to frontmatter
@@ -110,6 +112,7 @@ notion-cli page sync ./document.md                          # Updates page using
 notion-cli page sync ./document.md --parent "Engineering"   # Set parent on first sync
 notion-cli page sync ./document.md --parent-db <db-id>      # Sync as database entry
 notion-cli page sync ./document.md                          # Uploads standalone local images when configured
+notion-cli page sync ./document.md --skip-local-images      # Strips standalone local image lines instead
 
 # Edit an existing page
 notion-cli page edit <page> --replace "New content"                      # Replace all content
@@ -121,9 +124,11 @@ notion-cli page edit <page> -P "Status=Done" -P "Priority=1"             # Updat
 
 The `<page>` argument accepts a URL, ID, or page name.
 
+`page archive` accepts a page URL or page ID and moves that page to trash via the official API. This requires an official API token configured through `auth api setup` or `NOTION_API_TOKEN`.
+
 `page view` shows open page-level comments and inline block discussions by default. Inline discussions are rendered in context, with the anchor text wrapped in `[[...]]` and the discussion shown immediately below it. Use `--no-comments` to suppress comments, `--raw` to inspect the original Notion markup, and `--json` to return the page plus a `Comments` array.
 
-`page upload` and `page sync` support native local image upload for standalone markdown image lines like `![Alt](./diagram.png)`. When local images are present, `notion-cli` uploads those files through the official Notion API and keeps them in document order. This requires an official API token configured through `auth api setup` or `NOTION_API_TOKEN`. Inline or mixed-content local image syntax is rejected instead of being guessed.
+`page upload` and `page sync` support native local image upload for standalone markdown image lines like `![Alt](./diagram.png)`. When local images are present, `notion-cli` uploads those files through the official Notion API and keeps them in document order. This requires an official API token configured through `auth api setup` or `NOTION_API_TOKEN`. Pass `--skip-local-images` to silently remove standalone local image lines instead of uploading them. Inline or mixed-content local image syntax is rejected instead of being guessed.
 
 ### Search
 

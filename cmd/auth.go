@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -32,6 +33,7 @@ var authAPIInput io.Reader = os.Stdin
 var authAPIOutput io.Writer = os.Stdout
 var authAPIError io.Writer = os.Stderr
 var openOfficialAPIBrowser = mcp.OpenBrowser
+var notionAPITokenPattern = regexp.MustCompile(`^ntn_[A-Za-z0-9]{20,}$`)
 
 const officialAPIIntegrationsURL = "https://www.notion.so/profile/integrations/internal"
 
@@ -279,6 +281,10 @@ func (c *AuthAPISetupCmd) Run(ctx *Context) error {
 		output.PrintError(err)
 		return err
 	}
+	if !looksLikeNotionAPIToken(token) {
+		output.PrintWarning("Official API token does not match the expected Notion token format")
+		_, _ = fmt.Fprintln(authAPIOutput, "Expected format: ntn_<letters-and-numbers>")
+	}
 	if err := config.SetAPITokenForProfile(ctx.Profile, token); err != nil {
 		output.PrintError(err)
 		return err
@@ -291,18 +297,6 @@ func (c *AuthAPISetupCmd) Run(ctx *Context) error {
 
 type AuthAPIStatusCmd struct {
 	JSON bool `help:"Output as JSON" short:"j"`
-}
-
-func officialAPIOverrides(ctx *Context) config.APIOverrides {
-	if ctx == nil {
-		return config.APIOverrides{}
-	}
-	return config.APIOverrides{
-		Profile:       ctx.Profile,
-		BaseURL:       ctx.APIBaseURL,
-		NotionVersion: ctx.APINotionVersion,
-		Token:         ctx.APIToken,
-	}
 }
 
 func (c *AuthAPIStatusCmd) Run(ctx *Context) error {
@@ -457,6 +451,10 @@ func readOfficialAPIToken(in io.Reader, out, errOut io.Writer) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(line), nil
+}
+
+func looksLikeNotionAPIToken(token string) bool {
+	return notionAPITokenPattern.MatchString(strings.TrimSpace(token))
 }
 
 func printOfficialAPITokenSetupHint(out io.Writer, shouldOpenBrowser bool) {
