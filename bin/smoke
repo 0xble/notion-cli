@@ -19,4 +19,4 @@ if ! printf '%s\n' "$VERSION_OUTPUT" | grep -Fq -- "$EXPECTED_VERSION"; then
 fi
 
 "$BIN_PATH" --help >/dev/null
-echo "smoke ok"
+echo "smoke ok: notion-cli"
