@@ -15,6 +15,11 @@ import (
 
 var ErrNoToken = errors.New("no token available")
 
+var (
+	refreshLocksMu sync.Mutex
+	refreshLocks   = map[string]*sync.Mutex{}
+)
+
 type FileTokenStore struct {
 	path string
 	mu   sync.RWMutex
@@ -85,12 +90,7 @@ func (s *FileTokenStore) SaveToken(ctx context.Context, token *transport.Token) 
 		ClientID:     existing.ClientID,
 	}
 
-	data, err := json.MarshalIndent(stored, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(s.path, data, 0600)
+	return s.writeStoredToken(ctx, stored)
 }
 
 func (s *FileTokenStore) Clear() error {
@@ -105,6 +105,10 @@ func (s *FileTokenStore) Clear() error {
 
 func (s *FileTokenStore) Path() string {
 	return s.path
+}
+
+func (s *FileTokenStore) LockPath() string {
+	return s.path + ".lock"
 }
 
 type storedToken struct {
@@ -161,10 +165,89 @@ func (s *FileTokenStore) SaveClientID(ctx context.Context, clientID string) erro
 
 	stored.ClientID = clientID
 
-	data, err = json.MarshalIndent(stored, "", "  ")
+	return s.writeStoredToken(ctx, stored)
+}
+
+func (s *FileTokenStore) writeStoredToken(ctx context.Context, stored storedToken) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	dir := filepath.Dir(s.path)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(stored, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(s.path, data, 0600)
+	tmp, err := os.CreateTemp(dir, ".token-*.json")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	if err := tmp.Chmod(0600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+
+	if err := os.Rename(tmpPath, s.path); err != nil {
+		return err
+	}
+	cleanup = false
+	return nil
+}
+
+func (s *FileTokenStore) WithLock(ctx context.Context, fn func() error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	processLock := processRefreshLock(s.LockPath())
+	processLock.Lock()
+	defer processLock.Unlock()
+
+	dir := filepath.Dir(s.path)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+
+	lockFile, err := acquireFileLock(s.LockPath())
+	if err != nil {
+		return err
+	}
+	defer func() { _ = releaseFileLock(lockFile) }()
+
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return fn()
+}
+
+func processRefreshLock(path string) *sync.Mutex {
+	refreshLocksMu.Lock()
+	defer refreshLocksMu.Unlock()
+
+	lock, ok := refreshLocks[path]
+	if !ok {
+		lock = &sync.Mutex{}
+		refreshLocks[path] = lock
+	}
+	return lock
 }
