@@ -73,7 +73,7 @@ func autoRefreshIfNeeded(ctx context.Context) error {
 			return fmt.Errorf("token expired and no refresh token available")
 		}
 
-		_, err := mcp.RefreshToken(ctx, tokenStore)
+		_, err := mcp.RefreshTokenIfNeeded(ctx, tokenStore)
 		if err != nil {
 			return fmt.Errorf("auto-refresh failed: %w", err)
 		}

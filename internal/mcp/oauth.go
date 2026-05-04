@@ -208,6 +208,14 @@ func RunOAuthFlow(ctx context.Context, tokenStore *FileTokenStore) error {
 }
 
 func RefreshToken(ctx context.Context, tokenStore *FileTokenStore) (*transport.Token, error) {
+	return refreshTokenLocked(ctx, tokenStore, true)
+}
+
+func RefreshTokenIfNeeded(ctx context.Context, tokenStore *FileTokenStore) (*transport.Token, error) {
+	return refreshTokenLocked(ctx, tokenStore, false)
+}
+
+func refreshTokenLocked(ctx context.Context, tokenStore *FileTokenStore, force bool) (*transport.Token, error) {
 	var refreshed *transport.Token
 	err := tokenStore.WithLock(ctx, func() error {
 		token, err := tokenStore.GetToken(ctx)
@@ -215,7 +223,7 @@ func RefreshToken(ctx context.Context, tokenStore *FileTokenStore) (*transport.T
 			return fmt.Errorf("get token: %w", err)
 		}
 
-		if tokenFresh(token) {
+		if !force && tokenFresh(token) {
 			refreshed = token
 			return nil
 		}
@@ -268,11 +276,6 @@ func isInvalidGrantError(err error) bool {
 }
 
 func refreshTokenWithNotion(ctx context.Context, tokenStore *FileTokenStore, token *transport.Token) (*transport.Token, error) {
-	token, err := tokenStore.GetToken(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("get token: %w", err)
-	}
-
 	if token.RefreshToken == "" {
 		return nil, errors.New("no refresh token available")
 	}
@@ -314,10 +317,6 @@ func refreshTokenWithNotion(ctx context.Context, tokenStore *FileTokenStore, tok
 	newToken, err := handler.RefreshToken(ctx, token.RefreshToken)
 	if err != nil {
 		return nil, fmt.Errorf("refresh token: %w", err)
-	}
-
-	if err := tokenStore.SaveToken(ctx, newToken); err != nil {
-		return nil, fmt.Errorf("save token: %w", err)
 	}
 
 	return newToken, nil

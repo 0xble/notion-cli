@@ -44,7 +44,7 @@ func TestRefreshTokenSkipsRefreshWhenAnotherCallerAlreadyRefreshed(t *testing.T)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			token, err := RefreshToken(context.Background(), store)
+			token, err := RefreshTokenIfNeeded(context.Background(), store)
 			if err != nil {
 				errs <- err
 				return
@@ -99,6 +99,53 @@ func TestRefreshTokenInvalidGrantUsesNewerSavedToken(t *testing.T) {
 	}
 	if token.AccessToken != "winner-access" {
 		t.Fatalf("access token = %q, want winner-access", token.AccessToken)
+	}
+}
+
+func TestRefreshTokenForcesRefreshWhenTokenIsFresh(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	store, err := NewFileTokenStore("work")
+	if err != nil {
+		t.Fatalf("NewFileTokenStore: %v", err)
+	}
+	if err := store.SaveClientID(context.Background(), "client-123"); err != nil {
+		t.Fatalf("SaveClientID: %v", err)
+	}
+	if err := store.SaveToken(context.Background(), &transport.Token{
+		AccessToken:  "fresh-access",
+		TokenType:    "bearer",
+		RefreshToken: "fresh-refresh",
+		ExpiresAt:    time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("SaveToken: %v", err)
+	}
+
+	oldRefresh := refreshOAuthToken
+	t.Cleanup(func() {
+		refreshOAuthToken = oldRefresh
+	})
+
+	var refreshCalls atomic.Int32
+	refreshOAuthToken = func(context.Context, *FileTokenStore, *transport.Token) (*transport.Token, error) {
+		refreshCalls.Add(1)
+		return &transport.Token{
+			AccessToken:  "forced-access",
+			TokenType:    "bearer",
+			RefreshToken: "forced-refresh",
+			ExpiresAt:    time.Now().Add(time.Hour),
+		}, nil
+	}
+
+	token, err := RefreshToken(context.Background(), store)
+	if err != nil {
+		t.Fatalf("RefreshToken: %v", err)
+	}
+	if token.AccessToken != "forced-access" {
+		t.Fatalf("access token = %q, want forced-access", token.AccessToken)
+	}
+	if got := refreshCalls.Load(); got != 1 {
+		t.Fatalf("refresh calls = %d, want 1", got)
 	}
 }
 
