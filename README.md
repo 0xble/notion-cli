@@ -250,7 +250,7 @@ Named profiles store their credentials under `~/.config/notion-cli/profiles/<pro
 
 | Variable | Description |
 |----------|-------------|
-| `NOTION_PROFILE` | Config profile name to use for OAuth token and official API config |
+| `NOTION_CLI_PROFILE` | Default profile when `--profile` is not passed |
 | `NOTION_ACCESS_TOKEN` | Access token for CI/headless usage (skips OAuth) |
 | `NOTION_API_TOKEN` | Official Notion API token used for upload fallback and verification |
 | `NOTION_API_BASE_URL` | Override the official Notion API base URL |

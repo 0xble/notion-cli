@@ -44,24 +44,6 @@ func runDBList(ctx *Context, query string, limit int) error {
 	return output.PrintDatabases(dbs, ctx.JSON)
 }
 
-func filterDatabases(results []mcp.SearchResult, limit int) []output.Database {
-	dbs := make([]output.Database, 0)
-	for _, r := range results {
-		if r.ObjectType != "database" && r.Object != "database" && r.ObjectType != "data_source" && r.Type != "database" {
-			continue
-		}
-		if limit > 0 && len(dbs) >= limit {
-			break
-		}
-		dbs = append(dbs, output.Database{
-			ID:    r.ID,
-			Title: r.Title,
-			URL:   r.URL,
-		})
-	}
-	return dbs
-}
-
 type DBQueryCmd struct {
 	ID   string `arg:"" help:"Database URL or ID"`
 	JSON bool   `help:"Output as JSON" short:"j"`

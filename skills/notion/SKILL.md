@@ -39,7 +39,7 @@ notion-cli --profile work auth login
 notion-cli --profile work auth api setup
 ```
 
-For CI/headless environments, set `NOTION_ACCESS_TOKEN`. To isolate credentials per workspace/account, pass `--profile <name>` or set `NOTION_PROFILE`.
+For CI/headless environments, set `NOTION_ACCESS_TOKEN`. To isolate credentials per workspace/account, pass `--profile <name>` or set `NOTION_CLI_PROFILE`.
 
 Some fallback features also use the official Notion API:
 

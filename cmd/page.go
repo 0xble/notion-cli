@@ -57,24 +57,6 @@ func runPageList(ctx *Context, query string, limit int) error {
 	return output.PrintPages(pages, ctx.JSON)
 }
 
-func filterPages(results []mcp.SearchResult, limit int) []output.Page {
-	pages := make([]output.Page, 0)
-	for _, r := range results {
-		if r.ObjectType != "page" && r.Object != "page" && r.Type != "page" {
-			continue
-		}
-		if limit > 0 && len(pages) >= limit {
-			break
-		}
-		pages = append(pages, output.Page{
-			ID:    r.ID,
-			Title: r.Title,
-			URL:   r.URL,
-		})
-	}
-	return pages
-}
-
 type PageViewCmd struct {
 	Page     string `arg:"" help:"Page URL, name, or ID"`
 	Comments bool   `help:"Show open page and block comments" default:"true" negatable:""`
