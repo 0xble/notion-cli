@@ -84,6 +84,37 @@ type RichText struct {
 	PlainText string `json:"plain_text"`
 }
 
+type SearchFilter struct {
+	Property string `json:"property"`
+	Value    string `json:"value"`
+}
+
+type SearchRequest struct {
+	Query       string        `json:"query,omitempty"`
+	Filter      *SearchFilter `json:"filter,omitempty"`
+	PageSize    int           `json:"page_size,omitempty"`
+	StartCursor string        `json:"start_cursor,omitempty"`
+}
+
+type SearchObject struct {
+	Object         string                     `json:"object"`
+	ID             string                     `json:"id"`
+	URL            string                     `json:"url,omitempty"`
+	CreatedTime    time.Time                  `json:"created_time,omitempty"`
+	LastEditedTime time.Time                  `json:"last_edited_time,omitempty"`
+	InTrash        bool                       `json:"in_trash,omitempty"`
+	Archived       bool                       `json:"archived,omitempty"`
+	Title          []RichText                 `json:"title,omitempty"`
+	Description    []RichText                 `json:"description,omitempty"`
+	Properties     map[string]json.RawMessage `json:"properties,omitempty"`
+}
+
+type SearchResponse struct {
+	Results    []SearchObject `json:"results"`
+	NextCursor string         `json:"next_cursor,omitempty"`
+	HasMore    bool           `json:"has_more"`
+}
+
 type listBlocksResponse struct {
 	Results    []Block `json:"results"`
 	NextCursor string  `json:"next_cursor,omitempty"`
@@ -132,6 +163,54 @@ func (c *Client) GetPageMarkdown(ctx context.Context, pageID string) (*PageMarkd
 		return nil, err
 	}
 	return &out, nil
+}
+
+func (c *Client) Search(ctx context.Context, req SearchRequest) (*SearchResponse, error) {
+	if req.PageSize < 0 {
+		return nil, fmt.Errorf("page size must be non-negative")
+	}
+	if req.PageSize > 100 {
+		req.PageSize = 100
+	}
+	req.Query = strings.TrimSpace(req.Query)
+	req.StartCursor = strings.TrimSpace(req.StartCursor)
+
+	var out SearchResponse
+	if err := c.doJSON(ctx, http.MethodPost, "/search", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (o SearchObject) DisplayTitle() string {
+	if title := plainText(o.Title); title != "" {
+		return title
+	}
+	for _, raw := range o.Properties {
+		var prop struct {
+			Type  string     `json:"type"`
+			Title []RichText `json:"title"`
+		}
+		if err := json.Unmarshal(raw, &prop); err != nil {
+			continue
+		}
+		if prop.Type == "title" {
+			return plainText(prop.Title)
+		}
+	}
+	return ""
+}
+
+func (o SearchObject) DisplayDescription() string {
+	return plainText(o.Description)
+}
+
+func plainText(richText []RichText) string {
+	var b strings.Builder
+	for _, item := range richText {
+		b.WriteString(item.PlainText)
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // SinglePartUploadMaxBytes is Notion's single_part file-upload size limit.

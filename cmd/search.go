@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/lox/notion-cli/internal/cli"
 	"github.com/lox/notion-cli/internal/mcp"
@@ -21,6 +23,10 @@ func (c *SearchCmd) Run(ctx *Context) error {
 }
 
 func runSearch(ctx *Context, query string, limit int, searchMode string) error {
+	if strings.TrimSpace(query) == "" {
+		return fmt.Errorf("search query is required")
+	}
+
 	client, err := cli.RequireClient()
 	if err != nil {
 		return err

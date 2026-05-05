@@ -41,21 +41,19 @@ func (c *PageListCmd) Run(ctx *Context) error {
 }
 
 func runPageList(ctx *Context, query string, limit int) error {
-	client, err := cli.RequireClient()
+	client, err := cli.RequireOfficialAPIClient(officialAPIOverrides(ctx))
 	if err != nil {
 		return err
 	}
-	defer func() { _ = client.Close() }()
 
 	bgCtx := context.Background()
 
-	resp, err := client.Search(bgCtx, query, &mcp.SearchOptions{ContentSearchMode: "workspace_search"})
+	pages, err := searchPages(bgCtx, client, query, limit)
 	if err != nil {
 		output.PrintError(err)
 		return err
 	}
 
-	pages := filterPages(resp.Results, limit)
 	return output.PrintPages(pages, ctx.JSON)
 }
 

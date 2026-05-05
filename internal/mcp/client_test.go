@@ -5,9 +5,10 @@ import (
 	"testing"
 )
 
-func TestBuildSearchToolArgsOmitsBlankQuery(t *testing.T) {
+func TestBuildSearchToolArgsIncludesBlankQuery(t *testing.T) {
 	got := buildSearchToolArgs("", &SearchOptions{ContentSearchMode: "workspace_search"})
 	want := map[string]any{
+		"query":               "",
 		"content_search_mode": "workspace_search",
 	}
 

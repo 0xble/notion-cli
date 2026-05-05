@@ -197,9 +197,8 @@ func (c *Client) Search(ctx context.Context, query string, opts *SearchOptions) 
 }
 
 func buildSearchToolArgs(query string, opts *SearchOptions) map[string]any {
-	args := map[string]any{}
-	if strings.TrimSpace(query) != "" {
-		args["query"] = query
+	args := map[string]any{
+		"query": strings.TrimSpace(query),
 	}
 	if opts != nil && opts.ContentSearchMode != "" {
 		args["content_search_mode"] = opts.ContentSearchMode

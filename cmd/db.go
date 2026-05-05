@@ -28,21 +28,19 @@ func (c *DBListCmd) Run(ctx *Context) error {
 }
 
 func runDBList(ctx *Context, query string, limit int) error {
-	client, err := cli.RequireClient()
+	client, err := cli.RequireOfficialAPIClient(officialAPIOverrides(ctx))
 	if err != nil {
 		return err
 	}
-	defer func() { _ = client.Close() }()
 
 	bgCtx := context.Background()
 
-	resp, err := client.Search(bgCtx, query, &mcp.SearchOptions{ContentSearchMode: "workspace_search"})
+	dbs, err := searchDatabases(bgCtx, client, query, limit)
 	if err != nil {
 		output.PrintError(err)
 		return err
 	}
 
-	dbs := filterDatabases(resp.Results, limit)
 	return output.PrintDatabases(dbs, ctx.JSON)
 }
 

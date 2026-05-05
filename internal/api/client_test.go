@@ -44,6 +44,82 @@ func TestGetSelf(t *testing.T) {
 	}
 }
 
+func TestSearchPostsFilterAndExtractsTitles(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/search" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		defer func() { _ = r.Body.Close() }()
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("Decode: %v", err)
+		}
+		if payload["query"] != "Tasks" {
+			t.Fatalf("query = %#v", payload["query"])
+		}
+		filter, ok := payload["filter"].(map[string]any)
+		if !ok {
+			t.Fatalf("filter = %#v", payload["filter"])
+		}
+		if filter["property"] != "object" || filter["value"] != "page" {
+			t.Fatalf("filter = %#v", filter)
+		}
+		if payload["page_size"] != float64(10) {
+			t.Fatalf("page_size = %#v", payload["page_size"])
+		}
+		_, _ = w.Write([]byte(`{
+			"results": [
+				{
+					"object": "page",
+					"id": "page_123",
+					"url": "https://notion.so/page_123",
+					"properties": {
+						"Name": {
+							"type": "title",
+							"title": [{"plain_text": "Task list"}]
+						}
+					}
+				},
+				{
+					"object": "database",
+					"id": "db_123",
+					"url": "https://notion.so/db_123",
+					"title": [{"plain_text": "Tasks"}],
+					"description": [{"plain_text": "Open work"}]
+				}
+			],
+			"has_more": false
+		}`))
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(config.APIConfig{BaseURL: srv.URL + "/v1"}, "secret-token")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	resp, err := client.Search(context.Background(), SearchRequest{
+		Query:    " Tasks ",
+		Filter:   &SearchFilter{Property: "object", Value: "page"},
+		PageSize: 10,
+	})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(resp.Results) != 2 {
+		t.Fatalf("results = %d", len(resp.Results))
+	}
+	if got := resp.Results[0].DisplayTitle(); got != "Task list" {
+		t.Fatalf("page title = %q", got)
+	}
+	if got := resp.Results[1].DisplayTitle(); got != "Tasks" {
+		t.Fatalf("database title = %q", got)
+	}
+	if got := resp.Results[1].DisplayDescription(); got != "Open work" {
+		t.Fatalf("database description = %q", got)
+	}
+}
+
 func TestUploadFileAndAppendAfter(t *testing.T) {
 	createCalls := 0
 	sendCalls := 0
