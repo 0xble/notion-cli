@@ -11,6 +11,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -115,6 +116,40 @@ type SearchResponse struct {
 	HasMore    bool           `json:"has_more"`
 }
 
+type DataSource = SearchObject
+
+type DataSourceQueryRequest struct {
+	Filter      map[string]any   `json:"filter,omitempty"`
+	Sorts       []map[string]any `json:"sorts,omitempty"`
+	StartCursor string           `json:"start_cursor,omitempty"`
+	PageSize    int              `json:"page_size,omitempty"`
+	InTrash     *bool            `json:"in_trash,omitempty"`
+	ResultType  string           `json:"result_type,omitempty"`
+}
+
+type DataSourceQueryResponse struct {
+	Object        string         `json:"object"`
+	Type          string         `json:"type,omitempty"`
+	Results       []SearchObject `json:"results"`
+	NextCursor    string         `json:"next_cursor,omitempty"`
+	HasMore       bool           `json:"has_more"`
+	RequestStatus map[string]any `json:"request_status,omitempty"`
+}
+
+type DataSourceTemplate struct {
+	ID     string `json:"id"`
+	Name   string `json:"name,omitempty"`
+	URL    string `json:"url,omitempty"`
+	Type   string `json:"type,omitempty"`
+	Object string `json:"object,omitempty"`
+}
+
+type ListDataSourceTemplatesResponse struct {
+	Templates  []DataSourceTemplate `json:"templates"`
+	NextCursor string               `json:"next_cursor,omitempty"`
+	HasMore    bool                 `json:"has_more"`
+}
+
 type listBlocksResponse struct {
 	Results    []Block `json:"results"`
 	NextCursor string  `json:"next_cursor,omitempty"`
@@ -177,6 +212,75 @@ func (c *Client) Search(ctx context.Context, req SearchRequest) (*SearchResponse
 
 	var out SearchResponse
 	if err := c.doJSON(ctx, http.MethodPost, "/search", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *Client) GetDataSource(ctx context.Context, dataSourceID string) (*DataSource, error) {
+	dataSourceID = strings.TrimSpace(dataSourceID)
+	if dataSourceID == "" {
+		return nil, fmt.Errorf("data source ID is required")
+	}
+
+	var out DataSource
+	if err := c.doJSON(ctx, http.MethodGet, "/data_sources/"+dataSourceID, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *Client) QueryDataSource(ctx context.Context, dataSourceID string, req DataSourceQueryRequest) (*DataSourceQueryResponse, error) {
+	dataSourceID = strings.TrimSpace(dataSourceID)
+	if dataSourceID == "" {
+		return nil, fmt.Errorf("data source ID is required")
+	}
+	if req.PageSize < 0 {
+		return nil, fmt.Errorf("page size must be non-negative")
+	}
+	if req.PageSize > 100 {
+		req.PageSize = 100
+	}
+	req.StartCursor = strings.TrimSpace(req.StartCursor)
+	req.ResultType = strings.TrimSpace(req.ResultType)
+
+	var out DataSourceQueryResponse
+	if err := c.doJSON(ctx, http.MethodPost, "/data_sources/"+dataSourceID+"/query", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *Client) ListDataSourceTemplates(ctx context.Context, dataSourceID, name, startCursor string, pageSize int) (*ListDataSourceTemplatesResponse, error) {
+	dataSourceID = strings.TrimSpace(dataSourceID)
+	if dataSourceID == "" {
+		return nil, fmt.Errorf("data source ID is required")
+	}
+	if pageSize < 0 {
+		return nil, fmt.Errorf("page size must be non-negative")
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	values := url.Values{}
+	if name = strings.TrimSpace(name); name != "" {
+		values.Set("name", name)
+	}
+	if startCursor = strings.TrimSpace(startCursor); startCursor != "" {
+		values.Set("start_cursor", startCursor)
+	}
+	if pageSize > 0 {
+		values.Set("page_size", fmt.Sprintf("%d", pageSize))
+	}
+
+	path := "/data_sources/" + dataSourceID + "/templates"
+	if encoded := values.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+
+	var out ListDataSourceTemplatesResponse
+	if err := c.doJSON(ctx, http.MethodGet, path, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

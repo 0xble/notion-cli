@@ -235,6 +235,10 @@ func printJSON(v any) error {
 	return enc.Encode(v)
 }
 
+func PrintJSON(v any) error {
+	return printJSON(v)
+}
+
 func formatTime(t time.Time) string {
 	if t.IsZero() {
 		return ""

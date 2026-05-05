@@ -159,6 +159,29 @@ notion-cli db create <database> -t "Title" --json
 
 The `<database>` argument accepts a URL, ID, or name. Date properties use the expanded key format: `date:<Property Name>:start`, `date:<Property Name>:end`.
 
+### Data Sources
+
+```bash
+notion-cli source list                         # List data sources
+notion-cli source list -q "project"            # Filter by name
+notion-cli source list --json                  # Output as JSON
+
+notion-cli source view <source>                # View data source metadata
+notion-cli source view <source> --json         # Output raw data source JSON
+
+notion-cli source query <source>               # Query data source entries
+notion-cli source query <source> --limit 50    # Limit results
+notion-cli source query <source> --json        # Output raw query JSON
+notion-cli source query <source> --filter-json '{"property":"Status","status":{"equals":"Done"}}'
+notion-cli source query <source> --sorts-json '[{"timestamp":"created_time","direction":"descending"}]'
+
+notion-cli source templates <source>           # List data source templates
+notion-cli source templates <source> -q "Bug"  # Filter templates by name
+notion-cli source templates <source> --json    # Output as JSON
+```
+
+The `<source>` argument accepts a data source URL, ID, or name. These commands use Notion's official API and require an official API token configured through `auth api setup` or `NOTION_API_TOKEN`.
+
 ### Comments
 
 ```bash

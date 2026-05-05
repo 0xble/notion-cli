@@ -120,6 +120,65 @@ func TestSearchPostsFilterAndExtractsTitles(t *testing.T) {
 	}
 }
 
+func TestDataSourceEndpoints(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/data_sources/source_123":
+			_, _ = w.Write([]byte(`{"object":"data_source","id":"source_123","title":[{"plain_text":"Tasks"}]}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/data_sources/source_123/query":
+			defer func() { _ = r.Body.Close() }()
+			var payload map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("Decode: %v", err)
+			}
+			if payload["page_size"] != float64(10) {
+				t.Fatalf("page_size = %#v", payload["page_size"])
+			}
+			_, _ = w.Write([]byte(`{"object":"list","results":[{"object":"page","id":"page_123","properties":{"Name":{"type":"title","title":[{"plain_text":"Done"}]}}}],"has_more":false}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/data_sources/source_123/templates":
+			if got := r.URL.Query().Get("name"); got != "Bug" {
+				t.Fatalf("template name query = %q", got)
+			}
+			if got := r.URL.Query().Get("page_size"); got != "5" {
+				t.Fatalf("template page_size query = %q", got)
+			}
+			_, _ = w.Write([]byte(`{"templates":[{"object":"template","id":"template_123","name":"Bug"}],"has_more":false}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.String())
+		}
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(config.APIConfig{BaseURL: srv.URL + "/v1"}, "secret-token")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	source, err := client.GetDataSource(context.Background(), "source_123")
+	if err != nil {
+		t.Fatalf("GetDataSource: %v", err)
+	}
+	if source.DisplayTitle() != "Tasks" {
+		t.Fatalf("source title = %q", source.DisplayTitle())
+	}
+
+	query, err := client.QueryDataSource(context.Background(), "source_123", DataSourceQueryRequest{PageSize: 10})
+	if err != nil {
+		t.Fatalf("QueryDataSource: %v", err)
+	}
+	if len(query.Results) != 1 || query.Results[0].DisplayTitle() != "Done" {
+		t.Fatalf("query results = %#v", query.Results)
+	}
+
+	templates, err := client.ListDataSourceTemplates(context.Background(), "source_123", "Bug", "", 5)
+	if err != nil {
+		t.Fatalf("ListDataSourceTemplates: %v", err)
+	}
+	if len(templates.Templates) != 1 || templates.Templates[0].Name != "Bug" {
+		t.Fatalf("templates = %#v", templates.Templates)
+	}
+}
+
 func TestUploadFileAndAppendAfter(t *testing.T) {
 	createCalls := 0
 	sendCalls := 0
