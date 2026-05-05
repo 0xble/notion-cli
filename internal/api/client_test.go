@@ -143,6 +143,14 @@ func TestDataSourceEndpoints(t *testing.T) {
 				t.Fatalf("template page_size query = %q", got)
 			}
 			_, _ = w.Write([]byte(`{"templates":[{"object":"template","id":"template_123","name":"Bug"}],"has_more":false}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/views":
+			if got := r.URL.Query().Get("data_source_id"); got != "source_123" {
+				t.Fatalf("view data_source_id query = %q", got)
+			}
+			if got := r.URL.Query().Get("page_size"); got != "5" {
+				t.Fatalf("view page_size query = %q", got)
+			}
+			_, _ = w.Write([]byte(`{"object":"list","type":"view","results":[{"object":"view","id":"view_123","name":"Default view","type":"table"}],"has_more":false}`))
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.String())
 		}
@@ -176,6 +184,14 @@ func TestDataSourceEndpoints(t *testing.T) {
 	}
 	if len(templates.Templates) != 1 || templates.Templates[0].Name != "Bug" {
 		t.Fatalf("templates = %#v", templates.Templates)
+	}
+
+	views, err := client.ListViews(context.Background(), "source_123", "", 5)
+	if err != nil {
+		t.Fatalf("ListViews: %v", err)
+	}
+	if len(views.Results) != 1 || views.Results[0].Name != "Default view" {
+		t.Fatalf("views = %#v", views.Results)
 	}
 }
 

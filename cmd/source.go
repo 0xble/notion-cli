@@ -16,6 +16,7 @@ type SourceCmd struct {
 	View      SourceViewCmd      `cmd:"" help:"View a data source"`
 	Query     SourceQueryCmd     `cmd:"" help:"Query a data source"`
 	Templates SourceTemplatesCmd `cmd:"" help:"List data source templates"`
+	Views     SourceViewsCmd     `cmd:"" help:"List views for a data source"`
 }
 
 type SourceListCmd struct {
@@ -64,6 +65,17 @@ type SourceTemplatesCmd struct {
 func (c *SourceTemplatesCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
 	return runSourceTemplates(ctx, c.Source, c.Name, c.Limit)
+}
+
+type SourceViewsCmd struct {
+	Source string `arg:"" help:"Data source URL, ID, or name"`
+	Limit  int    `help:"Maximum number of views" short:"l" default:"20"`
+	JSON   bool   `help:"Output as JSON" short:"j"`
+}
+
+func (c *SourceViewsCmd) Run(ctx *Context) error {
+	ctx.JSON = c.JSON
+	return runSourceViews(ctx, c.Source, c.Limit)
 }
 
 func runSourceList(ctx *Context, query string, limit int) error {
@@ -195,6 +207,44 @@ func runSourceTemplates(ctx *Context, source, name string, limit int) error {
 			Type:  "template",
 			Title: title,
 			URL:   template.URL,
+		})
+	}
+	return output.PrintSearchResults(results, false)
+}
+
+func runSourceViews(ctx *Context, source string, limit int) error {
+	client, err := cli.RequireOfficialAPIClient(officialAPIOverrides(ctx))
+	if err != nil {
+		return err
+	}
+
+	bgCtx := context.Background()
+	sourceID, err := resolveDataSourceID(bgCtx, client, source)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	resp, err := client.ListViews(bgCtx, sourceID, "", searchPageSize(limit))
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+	if ctx.JSON {
+		return output.PrintJSON(resp)
+	}
+
+	results := make([]output.SearchResult, 0, len(resp.Results))
+	for _, view := range resp.Results {
+		title := view.Name
+		if title == "" {
+			title = view.ID
+		}
+		results = append(results, output.SearchResult{
+			ID:    view.ID,
+			Type:  "view",
+			Title: title,
+			URL:   view.URL,
 		})
 	}
 	return output.PrintSearchResults(results, false)

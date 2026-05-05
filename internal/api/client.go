@@ -150,6 +150,24 @@ type ListDataSourceTemplatesResponse struct {
 	HasMore    bool                 `json:"has_more"`
 }
 
+type View struct {
+	Object       string `json:"object"`
+	ID           string `json:"id"`
+	Name         string `json:"name,omitempty"`
+	Type         string `json:"type,omitempty"`
+	URL          string `json:"url,omitempty"`
+	DataSourceID string `json:"data_source_id,omitempty"`
+}
+
+type ListViewsResponse struct {
+	Object        string         `json:"object"`
+	Results       []View         `json:"results"`
+	NextCursor    string         `json:"next_cursor,omitempty"`
+	HasMore       bool           `json:"has_more"`
+	Type          string         `json:"type,omitempty"`
+	RequestStatus map[string]any `json:"request_status,omitempty"`
+}
+
 type listBlocksResponse struct {
 	Results    []Block `json:"results"`
 	NextCursor string  `json:"next_cursor,omitempty"`
@@ -281,6 +299,34 @@ func (c *Client) ListDataSourceTemplates(ctx context.Context, dataSourceID, name
 
 	var out ListDataSourceTemplatesResponse
 	if err := c.doJSON(ctx, http.MethodGet, path, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *Client) ListViews(ctx context.Context, dataSourceID, startCursor string, pageSize int) (*ListViewsResponse, error) {
+	dataSourceID = strings.TrimSpace(dataSourceID)
+	if dataSourceID == "" {
+		return nil, fmt.Errorf("data source ID is required")
+	}
+	if pageSize < 0 {
+		return nil, fmt.Errorf("page size must be non-negative")
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	values := url.Values{}
+	values.Set("data_source_id", dataSourceID)
+	if startCursor = strings.TrimSpace(startCursor); startCursor != "" {
+		values.Set("start_cursor", startCursor)
+	}
+	if pageSize > 0 {
+		values.Set("page_size", fmt.Sprintf("%d", pageSize))
+	}
+
+	var out ListViewsResponse
+	if err := c.doJSON(ctx, http.MethodGet, "/views?"+values.Encode(), nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

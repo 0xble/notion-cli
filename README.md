@@ -178,6 +178,9 @@ notion-cli source query <source> --sorts-json '[{"timestamp":"created_time","dir
 notion-cli source templates <source>           # List data source templates
 notion-cli source templates <source> -q "Bug"  # Filter templates by name
 notion-cli source templates <source> --json    # Output as JSON
+
+notion-cli source views <source>               # List views that reference a data source
+notion-cli source views <source> --json        # Output as JSON
 ```
 
 The `<source>` argument accepts a data source URL, ID, or name. These commands use Notion's official API and require an official API token configured through `auth api setup` or `NOTION_API_TOKEN`.
