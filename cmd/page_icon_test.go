@@ -37,3 +37,10 @@ func TestRunPageEditIconRejectsInvalidValue(t *testing.T) {
 		t.Fatal("expected invalid icon error")
 	}
 }
+
+func TestRunPageEditIconRejectsURLWithoutPageID(t *testing.T) {
+	err := runPageEdit(&Context{}, "https://example.com/page", "", "", "", "", nil, "✅", false)
+	if err == nil {
+		t.Fatal("expected page URL without an embedded ID to be rejected")
+	}
+}

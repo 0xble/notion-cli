@@ -452,6 +452,13 @@ func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText stri
 			_ = client.Close()
 		}
 	}()
+	if ref.Kind == cli.RefURL {
+		pageID, err = cli.ResolvePageID(bgCtx, nil, page)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+	}
 	if ref.Kind == cli.RefName {
 		client, err = cli.RequireClient()
 		if err != nil {
