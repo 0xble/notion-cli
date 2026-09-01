@@ -388,11 +388,12 @@ type PageEditCmd struct {
 	ReplaceWith          string   `help:"Text to replace with (requires --find)" name:"replace-with"`
 	Append               string   `help:"Append text after selection (requires --find)"`
 	Prop                 []string `help:"Set page properties (key=value, repeatable)" short:"P"`
+	Icon                 string   `help:"Page icon (emoji, https URL, or 'none' to clear)"`
 	AllowDeletingContent bool     `help:"Allow deleting child pages/databases when replacing content" name:"allow-deleting-content"`
 }
 
 func (c *PageEditCmd) Run(ctx *Context) error {
-	return runPageEdit(ctx, c.Page, c.Replace, c.Find, c.ReplaceWith, c.Append, c.Prop, c.AllowDeletingContent)
+	return runPageEdit(ctx, c.Page, c.Replace, c.Find, c.ReplaceWith, c.Append, c.Prop, c.Icon, c.AllowDeletingContent)
 }
 
 type PageArchiveCmd struct {
@@ -426,39 +427,72 @@ func runPageArchive(ctx *Context, page string) error {
 	return nil
 }
 
-func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText string, props []string, allowDeletingContent bool) error {
-	client, err := cli.RequireClient()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = client.Close() }()
-
-	bgCtx := context.Background()
-
-	ref := cli.ParsePageRef(page)
-	pageID := page
-	switch ref.Kind {
-	case cli.RefName:
-		resolved, err := cli.ResolvePageID(bgCtx, client, page)
+func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText string, props []string, icon string, allowDeletingContent bool) error {
+	explicitIcon := strings.TrimSpace(icon) != ""
+	var parsedIcon api.PageIcon
+	var err error
+	if explicitIcon {
+		parsedIcon, err = api.ParsePageIcon(icon)
 		if err != nil {
 			output.PrintError(err)
 			return err
 		}
-		pageID = resolved
-	case cli.RefID:
-		pageID = ref.ID
+	}
+	needsMCPUpdate := replace != "" || find != "" || replaceWith != "" || appendText != "" || len(props) > 0 || allowDeletingContent
+	if !needsMCPUpdate && !explicitIcon {
+		return &output.UserError{Message: "specify --replace, --prop, --icon, or --find with --replace-with or --append"}
 	}
 
-	req, err := buildPageEditRequest(replace, find, replaceWith, appendText, props, allowDeletingContent)
-	if err != nil {
-		output.PrintError(err)
-		return err
+	bgCtx := context.Background()
+	ref := cli.ParsePageRef(page)
+	pageID := ref.ID
+	var client *mcp.Client
+	defer func() {
+		if client != nil {
+			_ = client.Close()
+		}
+	}()
+	if ref.Kind == cli.RefName {
+		client, err = cli.RequireClient()
+		if err != nil {
+			return err
+		}
+		pageID, err = cli.ResolvePageID(bgCtx, client, page)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
 	}
-	req.PageID = pageID
 
-	if err := client.UpdatePage(bgCtx, req); err != nil {
-		output.PrintError(err)
-		return err
+	if needsMCPUpdate {
+		if client == nil {
+			client, err = cli.RequireClient()
+			if err != nil {
+				return err
+			}
+		}
+		req, err := buildPageEditRequest(replace, find, replaceWith, appendText, props, allowDeletingContent)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		req.PageID = pageID
+		if err := client.UpdatePage(bgCtx, req); err != nil {
+			output.PrintError(err)
+			return err
+		}
+	}
+
+	if explicitIcon {
+		apiClient, err := cli.RequireOfficialAPIClient(officialAPIOverrides(ctx))
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		if err := apiClient.SetPageIcon(bgCtx, pageID, parsedIcon); err != nil {
+			output.PrintError(err)
+			return err
+		}
 	}
 
 	output.PrintSuccess("Page updated")
