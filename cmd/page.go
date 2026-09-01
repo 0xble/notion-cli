@@ -15,13 +15,14 @@ import (
 )
 
 type PageCmd struct {
-	List    PageListCmd    `cmd:"" help:"List pages"`
-	View    PageViewCmd    `cmd:"" help:"View a page"`
-	Create  PageCreateCmd  `cmd:"" help:"Create a page"`
-	Upload  PageUploadCmd  `cmd:"" help:"Upload a markdown file as a page"`
-	Sync    PageSyncCmd    `cmd:"" help:"Sync a markdown file to a page (create or update)"`
-	Edit    PageEditCmd    `cmd:"" help:"Edit a page"`
-	Archive PageArchiveCmd `cmd:"" help:"Archive a page via the official API"`
+	List     PageListCmd     `cmd:"" help:"List pages"`
+	View     PageViewCmd     `cmd:"" help:"View a page"`
+	Create   PageCreateCmd   `cmd:"" help:"Create a page"`
+	Upload   PageUploadCmd   `cmd:"" help:"Upload a markdown file as a page"`
+	Sync     PageSyncCmd     `cmd:"" help:"Sync a markdown file to a page (create or update)"`
+	Edit     PageEditCmd     `cmd:"" help:"Edit a page"`
+	Archive  PageArchiveCmd  `cmd:"" help:"Archive a page via the official API"`
+	Property PagePropertyCmd `cmd:"" help:"Read full page property values"`
 }
 
 var loadPageViewCommentsFn = loadPageViewComments

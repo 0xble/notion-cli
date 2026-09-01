@@ -120,6 +120,11 @@ notion-cli page edit <page> --replace "New content" --allow-deleting-content # A
 notion-cli page edit <page> --find "old text" --replace-with "new text"  # Find and replace
 notion-cli page edit <page> --find "section" --append "extra content"    # Append after match
 notion-cli page edit <page> -P "Status=Done" -P "Priority=1"             # Update page properties
+
+# Read full property values (REST-backed and paginated)
+notion-cli page property get <page-id> --name "People"
+notion-cli page property get <page-id> --property-id "abc123"
+notion-cli page property get <page-id> --name "People" --json
 ```
 
 The `<page>` argument accepts a URL, ID, or page name.

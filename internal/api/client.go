@@ -70,6 +70,11 @@ type PageMarkdown struct {
 	UnknownBlockIDs []string `json:"unknown_block_ids,omitempty"`
 }
 
+type PagePropertyMeta struct {
+	ID   string `json:"id"`
+	Type string `json:"type"`
+}
+
 type Block struct {
 	ID        string          `json:"id"`
 	Object    string          `json:"object"`
@@ -216,6 +221,62 @@ func (c *Client) GetPageMarkdown(ctx context.Context, pageID string) (*PageMarkd
 		return nil, err
 	}
 	return &out, nil
+}
+
+func (c *Client) RetrievePageProperties(ctx context.Context, pageID string) (map[string]PagePropertyMeta, error) {
+	pageID = strings.TrimSpace(pageID)
+	if pageID == "" {
+		return nil, fmt.Errorf("page ID is required")
+	}
+
+	var out struct {
+		Properties map[string]PagePropertyMeta `json:"properties"`
+	}
+	if err := c.doJSON(ctx, http.MethodGet, "/pages/"+pageID, nil, &out); err != nil {
+		return nil, err
+	}
+	if out.Properties == nil {
+		return map[string]PagePropertyMeta{}, nil
+	}
+	return out.Properties, nil
+}
+
+func (c *Client) RetrievePagePropertyItems(ctx context.Context, pageID, propertyID string) ([]any, error) {
+	pageID = strings.TrimSpace(pageID)
+	propertyID = strings.TrimSpace(propertyID)
+	if pageID == "" {
+		return nil, fmt.Errorf("page ID is required")
+	}
+	if propertyID == "" {
+		return nil, fmt.Errorf("property ID is required")
+	}
+
+	basePath := "/pages/" + pageID + "/properties/" + url.PathEscape(propertyID)
+	items := make([]any, 0)
+	cursor := ""
+	for {
+		values := url.Values{"page_size": {"100"}}
+		if cursor != "" {
+			values.Set("start_cursor", cursor)
+		}
+
+		var out map[string]any
+		if err := c.doJSON(ctx, http.MethodGet, basePath+"?"+values.Encode(), nil, &out); err != nil {
+			return nil, err
+		}
+		if object, _ := out["object"].(string); object != "list" {
+			return append(items, out), nil
+		}
+		if results, ok := out["results"].([]any); ok {
+			items = append(items, results...)
+		}
+		hasMore, _ := out["has_more"].(bool)
+		nextCursor, _ := out["next_cursor"].(string)
+		if !hasMore || strings.TrimSpace(nextCursor) == "" {
+			return items, nil
+		}
+		cursor = nextCursor
+	}
 }
 
 func (c *Client) Search(ctx context.Context, req SearchRequest) (*SearchResponse, error) {
