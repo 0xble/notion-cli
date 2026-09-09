@@ -48,11 +48,48 @@ only to `origin`; never push to `upstream`.
 - **Status:** Active; source difference confirmed against `upstream/main` on 2026-09-09.
 - **Provenance:** `4af0de681956345d96cb74b425736a61c086537a` and
   `a8e86e8046cbae6de63b22128347fa282d8ff934`; **surfaces/invariant:**
-  `cmd/{source.go,page_property.go,page_icon_test.go}` keep read/property/icon paths tested.
-- **Proof:** `go test ./cmd ./internal/api`; **rollback:** revert both commits after
-  command-interface equivalence. **Upstream issue/PR:** untracked; audit 2026-09-09
-  records no association, not an absence claim. **Retire when:** released upstream
-  passes the same proof with no fork-specific behavior.
+  `cmd/source.go` keeps data-source reads and views tested.
+- **Proof:** `go test ./cmd ./internal/api`; **rollback:** revert both commits only
+  after command-interface equivalence. **Upstream issue/PR:** untracked; audit
+  2026-09-09 records no association, not an absence claim. **Retire when:** released
+  upstream passes the same proof with no fork-specific behavior.
+
+### NOTION-004: `feat(page): retain full property reads and icon support`
+
+- **Status:** Active; source difference confirmed against `upstream/main` on 2026-09-09.
+- **Provenance:** `0e50ef7efab1504fa6c4f30361a12a88ae8dcff2`,
+  `8fd7c2fb0d820acaf3d1fe0fb8da5ae969203b65`, and
+  `14330663a4e86baf31fbddc416868124f2348dae`.
+- **Surfaces/invariant:** `cmd/{page.go,page_property.go}` and `internal/api/` keep
+  full property reads, icon updates, and page-ID validation covered.
+- **Proof:** `go test ./cmd ./internal/api`; **rollback:** revert this family only
+  after equivalent property, icon, and invalid-URL coverage. **Associated fork PRs:**
+  `https://github.com/0xble/notion-cli/pull/13` and
+  `https://github.com/0xble/notion-cli/pull/15` are closed; they are
+  provenance, not evidence that upstream has the behavior. **Retire when:** released
+  upstream passes the complete proof without this delta.
+
+### NOTION-005: `fix(notion): retain official API search semantics`
+
+- **Status:** Active; source difference confirmed against `upstream/main` on 2026-09-09.
+- **Provenance:** `e6a35ed18428e54199c31652b8e4ede1cd94b3b7`; **surfaces/invariant:**
+  `cmd/{official_search.go,search.go,db.go,page.go}`, `internal/api/`, and
+  `internal/mcp/` retain tested official-search behavior.
+- **Proof:** `go test ./cmd ./internal/api ./internal/mcp`; **rollback:** revert the
+  provenance commit only after equivalent search and MCP coverage. **Upstream issue/PR:**
+  untracked; audit 2026-09-09 records no association, not an absence claim. **Retire
+  when:** released upstream passes the same proof without fork-specific behavior.
+
+### NOTION-006: `fix(build): retain fork version/install flow`
+
+- **Status:** Active; source difference confirmed against `upstream/main` on 2026-09-09.
+- **Provenance:** `ad2a7a8fcf9001317dbbb95e3c57f6324819ea0a`; **surfaces/invariant:**
+  `bin/{smoke,upgrade,version}`, `mise.toml`, `LOCAL.md`, and `README.md` preserve
+  fork version and install guidance without performing installation.
+- **Proof:** `sh -n bin/smoke bin/upgrade bin/version && mise run build`; **rollback:**
+  revert the provenance commit only after equivalent build/version coverage. **Upstream
+  issue/PR:** untracked; audit 2026-09-09 records no association, not an absence claim.
+  **Retire when:** a separately authorized runtime migration removes this fork flow.
 
 ## Update
 
