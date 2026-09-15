@@ -19,10 +19,11 @@ only to `origin`; never push to `upstream`.
 
 ## Active patches
 
+All entries are active; source differences were confirmed against upstream's
+then-current default branch on 2026-09-09.
+
 ### NOTION-001: `feat(auth): add multi-profile support`
 
-- **Status:** Active; source difference confirmed against upstream's then-current
-  default branch on 2026-09-09.
 - **Provenance:** `bec90a0e0dbc4f7b2e0116cc7c9683e44cc78d08` plus follow-ups through
   `eb14477bbb525e06a936e1320a8e84b9cd2c8ec2`.
 - **Surfaces/invariant:** `cmd/auth*.go`, `internal/config/`, and `internal/mcp/
@@ -36,8 +37,6 @@ only to `origin`; never push to `upstream`.
 
 ### NOTION-002: `feat(page): upload standalone local images via api`
 
-- **Status:** Active; source difference confirmed against upstream's then-current
-  default branch on 2026-09-09.
 - **Provenance:** `0cf8e0a3f6a3dd9e02c59eb04812bf11a193bc4f` through
   `1b51ee07ff6acdddbe23f8843ebeae9d1a0cc171`.
 - **Surfaces/invariant:** `cmd/page.go`, `internal/api/client.go`, and their tests
@@ -49,8 +48,6 @@ only to `origin`; never push to `upstream`.
 
 ### NOTION-003: `feat(notion): add data source read commands`
 
-- **Status:** Active; source difference confirmed against upstream's then-current
-  default branch on 2026-09-09.
 - **Provenance:** `4af0de681956345d96cb74b425736a61c086537a` and
   `a8e86e8046cbae6de63b22128347fa282d8ff934`; **surfaces/invariant:**
   `cmd/source.go` keeps data-source reads and views tested.
@@ -61,8 +58,6 @@ only to `origin`; never push to `upstream`.
 
 ### NOTION-004: `feat(page): retain full property reads and icon support`
 
-- **Status:** Active; source difference confirmed against upstream's then-current
-  default branch on 2026-09-09.
 - **Provenance:** `0e50ef7efab1504fa6c4f30361a12a88ae8dcff2`,
   `8fd7c2fb0d820acaf3d1fe0fb8da5ae969203b65`, and
   `14330663a4e86baf31fbddc416868124f2348dae`.
@@ -77,8 +72,6 @@ only to `origin`; never push to `upstream`.
 
 ### NOTION-005: `fix(notion): retain official API search semantics`
 
-- **Status:** Active; source difference confirmed against upstream's then-current
-  default branch on 2026-09-09.
 - **Provenance:** `e6a35ed18428e54199c31652b8e4ede1cd94b3b7`; **surfaces/invariant:**
   `cmd/{official_search.go,search.go,db.go,page.go}`, `internal/api/`, and
   `internal/mcp/` retain tested official-search behavior.
@@ -89,8 +82,6 @@ only to `origin`; never push to `upstream`.
 
 ### NOTION-006: `fix(build): retain fork version/install flow`
 
-- **Status:** Active; source difference confirmed against upstream's then-current
-  default branch on 2026-09-09.
 - **Provenance:** `ad2a7a8fcf9001317dbbb95e3c57f6324819ea0a`; **surfaces/invariant:**
   `bin/{smoke,upgrade,version}`, `mise.toml`, `LOCAL.md`, and `README.md` preserve
   fork version and install guidance without performing installation.
@@ -112,14 +103,6 @@ zero upstream-only commits; otherwise report `Blocked` with failed stage, exact 
 and evidence. Publish to `origin` or report that concrete blocker.
 
 ## Verify
-
-```text
-UPSTREAM_DEFAULT="$(git ls-remote --symref upstream HEAD | awk '/^ref:/ {sub("refs/heads/", "", $2); print $2; exit}')"
-test -n "$UPSTREAM_DEFAULT"
-git fetch --prune upstream "refs/heads/$UPSTREAM_DEFAULT:refs/remotes/upstream/$UPSTREAM_DEFAULT"
-git diff --check
-git rev-list --left-right --count "upstream/$UPSTREAM_DEFAULT...main"
-```
 
 Require a fresh final fetch with zero upstream-only commits and, after authorized
 publication, local `main` SHA equal to `origin/main`. Installed/runtime SHA proof
