@@ -22,73 +22,18 @@ only to `origin`; never push to `upstream`.
 All entries are active; source differences were confirmed against upstream's
 then-current default branch on 2026-09-09.
 
-### NOTION-001: `feat(auth): add multi-profile support`
+Read every linked support file on every maintenance run. This root is the sole
+enrolled contract; support files extend its shared Preserve, Update, and Verify
+requirements with the complete patch records and focused proof.
 
-- **Provenance:** `bec90a0e0dbc4f7b2e0116cc7c9683e44cc78d08` plus follow-ups through
-  `eb14477bbb525e06a936e1320a8e84b9cd2c8ec2`.
-- **Surfaces/invariant:** `cmd/auth*.go`, `internal/config/`, and `internal/mcp/
-  {oauth.go,token_store.go,token_lock_*.go}` keep profile names portable, refresh
-  serialized, and status/list output truthful.
-- **Proof:** `go test ./cmd ./internal/config ./internal/mcp`; **rollback:** revert
-  the relevant auth family only after profile/config regression proof.
-- **Upstream PR:** associated `https://github.com/lox/notion-cli/pull/35`, MERGED
-  2026-06-20 per the 2026-09-09 audit; live-check released descendant before retirement.
-- **Retire when:** released upstream passes the complete focused proof without fork delta.
-
-### NOTION-002: `feat(page): upload standalone local images via api`
-
-- **Provenance:** `0cf8e0a3f6a3dd9e02c59eb04812bf11a193bc4f` through
-  `1b51ee07ff6acdddbe23f8843ebeae9d1a0cc171`.
-- **Surfaces/invariant:** `cmd/page.go`, `internal/api/client.go`, and their tests
-  preserve safe official-API image upload and request override behavior.
-- **Proof:** `go test ./cmd ./internal/api`; **rollback:** revert this family after
-  equivalent upload/error-path coverage. **Upstream PR:** associated
-  `https://github.com/lox/notion-cli/pull/29`, MERGED 2026-04-30 per audit; live-check.
-- **Retire when:** released upstream proves the complete behavior without the delta.
-
-### NOTION-003: `feat(notion): add data source read commands`
-
-- **Provenance:** `4af0de681956345d96cb74b425736a61c086537a` and
-  `a8e86e8046cbae6de63b22128347fa282d8ff934`; **surfaces/invariant:**
-  `cmd/source.go` keeps data-source reads and views tested.
-- **Proof:** `go test ./cmd ./internal/api`; **rollback:** revert both commits only
-  after command-interface equivalence. **Upstream issue/PR:** untracked; audit
-  2026-09-09 records no association, not an absence claim. **Retire when:** released
-  upstream passes the same proof with no fork-specific behavior.
-
-### NOTION-004: `feat(page): retain full property reads and icon support`
-
-- **Provenance:** `0e50ef7efab1504fa6c4f30361a12a88ae8dcff2`,
-  `8fd7c2fb0d820acaf3d1fe0fb8da5ae969203b65`, and
-  `14330663a4e86baf31fbddc416868124f2348dae`.
-- **Surfaces/invariant:** `cmd/{page.go,page_property.go}` and `internal/api/` keep
-  full property reads, icon updates, and page-ID validation covered.
-- **Proof:** `go test ./cmd ./internal/api`; **rollback:** revert this family only
-  after equivalent property, icon, and invalid-URL coverage. **Associated fork PRs:**
-  `https://github.com/0xble/notion-cli/pull/13` and
-  `https://github.com/0xble/notion-cli/pull/15` are closed; they are
-  provenance, not evidence that upstream has the behavior. **Retire when:** released
-  upstream passes the complete proof without this delta.
-
-### NOTION-005: `fix(notion): retain official API search semantics`
-
-- **Provenance:** `e6a35ed18428e54199c31652b8e4ede1cd94b3b7`; **surfaces/invariant:**
-  `cmd/{official_search.go,search.go,db.go,page.go}`, `internal/api/`, and
-  `internal/mcp/` retain tested official-search behavior.
-- **Proof:** `go test ./cmd ./internal/api ./internal/mcp`; **rollback:** revert the
-  provenance commit only after equivalent search and MCP coverage. **Upstream issue/PR:**
-  untracked; audit 2026-09-09 records no association, not an absence claim. **Retire
-  when:** released upstream passes the same proof without fork-specific behavior.
-
-### NOTION-006: `fix(build): retain fork version/install flow`
-
-- **Provenance:** `ad2a7a8fcf9001317dbbb95e3c57f6324819ea0a`; **surfaces/invariant:**
-  `bin/{smoke,upgrade,version}`, `mise.toml`, `LOCAL.md`, and `README.md` preserve
-  fork version and install guidance without performing installation.
-- **Proof:** `sh -n bin/smoke bin/upgrade bin/version && mise run build`; **rollback:**
-  revert the provenance commit only after equivalent build/version coverage. **Upstream
-  issue/PR:** untracked; audit 2026-09-09 records no association, not an absence claim.
-  **Retire when:** a separately authorized runtime migration removes this fork flow.
+| Patch | Required behavior and record | When |
+| --- | --- | --- |
+| NOTION-001 | [Portable profiles and serialized authentication](maintenance/authentication.md) | Every run |
+| NOTION-002 | [Safe official-API local-image uploads](maintenance/official-api.md) | Every run |
+| NOTION-003 | [Data-source reads and views](maintenance/official-api.md) | Every run |
+| NOTION-004 | [Full property reads and icon support](maintenance/official-api.md) | Every run |
+| NOTION-005 | [Official API search semantics](maintenance/official-api.md) | Every run |
+| NOTION-006 | [Fork version and install flow](maintenance/distribution.md) | Every run |
 
 ## Update
 
