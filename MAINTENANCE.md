@@ -26,14 +26,11 @@ Read every linked support file on every maintenance run. This root is the sole
 enrolled contract; support files extend its shared Preserve, Update, and Verify
 requirements with the complete patch records and focused proof.
 
-| Patch | Required behavior and record | When |
-| --- | --- | --- |
-| NOTION-001 | [Portable profiles and serialized authentication](maintenance/authentication.md) | Every run |
-| NOTION-002 | [Safe official-API local-image uploads](maintenance/official-api.md) | Every run |
-| NOTION-003 | [Data-source reads and views](maintenance/official-api.md) | Every run |
-| NOTION-004 | [Full property reads and icon support](maintenance/official-api.md) | Every run |
-| NOTION-005 | [Official API search semantics](maintenance/official-api.md) | Every run |
-| NOTION-006 | [Fork version and install flow](maintenance/distribution.md) | Every run |
+| Unit | Required behavior | Load when | Contract |
+| --- | --- | --- | --- |
+| Authentication | Portable profiles and serialized, truthful authentication | Every maintenance run; also scoped authentication authoring | [Details](maintenance/authentication.md) |
+| Official API | Safe image uploads, data-source reads, full properties, icons, and search | Every maintenance run; also scoped API authoring | [Details](maintenance/official-api.md) |
+| Distribution | Fork version and installation flow | Every maintenance run; also scoped distribution authoring | [Details](maintenance/distribution.md) |
 
 ## Update
 
